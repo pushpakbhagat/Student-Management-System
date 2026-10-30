@@ -13,6 +13,7 @@ import { PageSkeleton } from "../ui/Skeleton";
 import CommandPalette from "../CommandPalette";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
+import InstallButton from "../InstallButton";
 import BackgroundDecor from "./BackgroundDecor";
 
 const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -140,6 +141,7 @@ export default function AppShell({ nav, portalName, status = "ready", onRetry })
               >
                 <Search size={18} />
               </button>
+              <InstallButton />
               <NotificationBell />
               <ThemeToggle />
               <UserChip className="ml-1" />

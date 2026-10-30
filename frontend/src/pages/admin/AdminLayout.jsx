@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { BookOpen, CalendarCheck, ClipboardList, GraduationCap, Info, LayoutDashboard, Megaphone, Settings, Users } from "lucide-react";
+import { BookOpen, CalendarCheck, CalendarClock, ClipboardList, GraduationCap, Info, LayoutDashboard, Megaphone, Settings, Users } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import useAdminStore from "../../store/useAdminStore";
 import useSessionStore from "../../store/useSessionStore";
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, tone: TONES.violet.chip },
   { to: "/admin/students", label: "Students", icon: Users, tone: TONES.sky.chip },
   { to: "/admin/courses", label: "Courses", icon: BookOpen, tone: TONES.teal.chip, adminOnly: true },
+  { to: "/admin/timetable", label: "Timetable", icon: CalendarClock, tone: TONES.sky.chip },
   { to: "/admin/attendance", label: "Attendance", icon: CalendarCheck, tone: TONES.coral.chip },
   { to: "/admin/grades", label: "Grades", icon: GraduationCap, tone: TONES.violet.chip },
   { to: "/admin/assignments", label: "Assignments", icon: ClipboardList, tone: TONES.amber.chip },

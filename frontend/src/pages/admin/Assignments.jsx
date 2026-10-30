@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
-import { CalendarDays, ClipboardList, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Inbox, Plus, Trash2 } from "lucide-react";
 import api, { getErrorMessage } from "../../api";
 import Button from "../../components/ui/Button";
 import { Card, CardHeader, EmptyState, PageHeader } from "../../components/ui/Card";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import SubmissionsPanel from "../../components/SubmissionsPanel";
 import { Badge } from "../../components/ui/Feedback";
 import { Field, FormError, Input, Select, Textarea } from "../../components/ui/Form";
 import useAdminStore from "../../store/useAdminStore";
@@ -36,6 +37,7 @@ export default function Assignments() {
   const [filter, setFilter] = useState("all");
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [reviewing, setReviewing] = useState(null);
 
   const courseName = useMemo(() => new Map(courses.map((c) => [c._id, c.courseName])), [courses]);
 
@@ -183,9 +185,14 @@ export default function Assignments() {
                               <Badge tone={dueTone(a.dueDate)}>{dueLabel(a.dueDate)}</Badge>
                             </div>
                           </div>
-                          <Button variant="danger" size="sm" onClick={() => setPendingDelete(a)} aria-label={`Delete ${a.title}`}>
-                            <Trash2 size={15} aria-hidden="true" />
-                          </Button>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button variant="secondary" size="sm" onClick={() => setReviewing(a)} aria-label={`Submissions for ${a.title}`}>
+                              <Inbox size={15} aria-hidden="true" /> <span className="hidden sm:inline">Submissions</span>
+                            </Button>
+                            <Button variant="danger" size="sm" onClick={() => setPendingDelete(a)} aria-label={`Delete ${a.title}`}>
+                              <Trash2 size={15} aria-hidden="true" />
+                            </Button>
+                          </div>
                         </div>
                       </Card>
                     </motion.li>
@@ -205,6 +212,10 @@ export default function Assignments() {
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      <AnimatePresence>
+        {reviewing && <SubmissionsPanel key={reviewing._id} assignment={reviewing} onClose={() => setReviewing(null)} />}
+      </AnimatePresence>
     </>
   );
 }

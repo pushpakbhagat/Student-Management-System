@@ -1,6 +1,6 @@
 # 🎓 Student Management System (Student Hub)
 
-A full-stack web application built using the MERN stack to manage student records, courses, attendance, grades, assignments and announcements, with role-based access for admins and students.
+A full-stack web application built using the MERN stack to manage student records, courses, attendance, grades, assignments and announcements, with role-based access for admins, teachers and students.
 
 ---
 
@@ -12,18 +12,23 @@ A full-stack web application built using the MERN stack to manage student record
   * CSRF protection (origin check, JSON-only bodies), login rate limiting, Helmet headers
   * bcrypt-hashed passwords that are never sent to the browser; changing a password signs out other devices
 
+* 👥 **Three roles** – admins run everything; teachers manage attendance, grades, assignments and announcements for the courses they're assigned; students see only their own data
 * 👨‍🎓 **Students** – searchable directory, add/edit with course enrollment, delete with confirmation
-* 📚 **Courses** – create/delete courses and manage each course's roster
+* 📚 **Courses** – create/delete courses, manage each course's roster, teachers and weekly class times
+* 🗓️ **Timetable** – a weekly view for students and staff, plus "today's classes" on the student dashboard
 * ✅ **Attendance by date** – record each class day (present / late / absent / excused), edit or delete past days; students see their day-by-day history
+* 📷 **QR check-in** – put a QR code on the classroom screen; students scan it with their phone camera to mark themselves present. The code changes every few seconds so a photo of it is useless outside the room; finishing marks everyone else absent
 * 🎓 **Gradebook** – weighted quizzes, assignments and exams per course; grades (%, letter, GPA) update live as you type
+* 📝 **Assignments & hand-ins** – per-course assignments with due dates; students hand in a written answer and/or a file (PDF, image, Word, text, up to 2 MB); teachers download, grade and leave feedback; late hand-ins are flagged
 * 📣 **Announcements** – for everyone or one course, with pinning; shown on students' dashboards
-* 📝 **Assignments** – per-course assignments with due dates and a due-date calendar
-* 📊 **Dashboards** for admins (stats, low-attendance alerts, enrollment) and students (attendance, GPA, news, deadlines)
+* 📈 **Insights** – attendance trend, grade distribution and course performance charts; an "at risk" list (low attendance, failing grades, absence streaks)
+* 🧾 **Report cards** – per student, printable or "save as PDF" from the browser
+* 🔔 **Notifications** – a bell menu with new announcements, new grades, upcoming deadlines and attendance warnings for students, and at-risk students, hand-ins to grade and unrecorded attendance for staff
 * 🌗 **Light & dark mode**, ⌘/Ctrl + K command palette, smooth animations, skeleton loading
-* 📱 **Mobile-friendly** – responsive layouts with a slide-out menu on phones and tablets
+* 📱 **Mobile-friendly and installable** – responsive layouts, and it can be installed as an app (PWA) that opens even without a connection
 * 📤 **CSV export** of students, attendance and grades; profile photo upload
-* 🧪 **Demo mode** – one-click "Try as admin / student" on the login page (`DEMO_MODE=true`)
-* ⚙️ **Account settings** – change your password and photo; admins can add other admins
+* 🧪 **Demo mode** – one-click "Try as admin / teacher / student" on the login page (`DEMO_MODE=true`)
+* ⚙️ **Account settings** – change your password and photo; admins can add admins and teachers
 
 ---
 
@@ -50,14 +55,15 @@ backend/
   models/           Mongoose schemas
   routes/           URL → controller mapping, with auth guards
   middlewares/      auth guards, CSRF check, request logger, error handler
-  services/auth.js  JWT + cookie + password helpers
+  services/         JWT + cookie + password helpers, grades, attendance counters, QR codes, course scoping
   seed.js           fills a database with demo data
   test/             API tests
 frontend/
   src/pages/        route pages (admin/, student/, login, register)
   src/components/   app shell, route guards and reusable UI (ui/)
   src/store/        Zustand stores: session, admin data, student portal data
-  src/lib/          formatting and helper functions
+  src/lib/          formatting, timetable, file and PWA helpers
+  public/sw.js      service worker (installable app, works offline)
   src/api.js        axios instance used for every API call
 .github/workflows/  CI: backend tests + audit, frontend lint + build
 ```
@@ -105,7 +111,7 @@ The frontend needs no `.env` in development.
 npm run seed -- --yes
 ```
 
-Demo logins: `admin@studenthub.com / admin123` and `rahul@studenthub.com / student123`.
+Demo logins: `admin@studenthub.com / admin123`, `teacher@studenthub.com / teacher123` and `rahul@studenthub.com / student123`.
 
 If you don't seed, open the app and use **Create an account** to make the first admin. After the first admin exists, only a logged-in admin can create more admins.
 
@@ -158,28 +164,46 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 | GET | `/check-auth`, `/me` | logged in |
 | PATCH | `/me/password` | logged in (rate limited) |
 | PATCH | `/me/photo` | logged in – your own profile photo |
+| GET | `/me/notifications` | logged in |
 | POST | `/demo-login` | anyone, only when `DEMO_MODE=true` |
 | GET | `/setup-status` | anyone – tells the UI whether first-admin sign-up is open |
-| POST | `/admins` | anyone while no admin exists, then admins only |
-| GET / POST | `/students` | admin |
+| POST | `/admins` | anyone while no admin exists, then admins only (can create teachers) |
+| GET | `/staff` | admin |
+| GET | `/students` | staff (teachers see their courses' students) |
+| POST | `/students` | admin |
 | PATCH | `/students/:email` | admin |
 | DELETE | `/students/:id` | admin |
 | GET | `/students/email/:email` | admin, or that student |
-| GET | `/courses`, `/assignments`, `/assignments/course/:courseId` | logged in (students get only their own courses) |
+| GET | `/courses`, `/assignments`, `/assignments/course/:courseId` | logged in (each role sees only its own courses) |
 | POST / DELETE | `/courses`, `/courses/:CourseId` | admin |
-| GET / POST | `/courses/:CourseId/sessions` | admin – attendance by day |
-| PATCH / DELETE | `/sessions/:id` | admin |
-| GET | `/me/attendance` | student – own day-by-day history |
-| GET / POST | `/courses/:CourseId/assessments` | admin – gradebook |
-| PATCH / DELETE | `/assessments/:id` | admin |
-| PUT | `/assessments/:id/scores` | admin |
-| GET | `/me/grades` | student – own scores, grades and GPA |
-| GET | `/announcements` | logged in (students see everyone's + their courses') |
-| POST / PATCH / DELETE | `/announcements`, `/announcements/:id` | admin |
+| PUT | `/courses/:CourseId/teachers`, `/courses/:CourseId/schedule` | admin |
 | POST | `/enrollcourse` | admin |
 | PATCH | `/enrollmultiplecourses`, `/enrollmultiplestudents` | admin |
 | DELETE | `/courses/:CourseId/students/:StudentId` | admin |
-| POST / PATCH / DELETE | `/assignments`, `/assignments/:id` | admin |
+| GET / POST | `/courses/:CourseId/sessions` | staff – attendance by day |
+| PATCH / DELETE | `/sessions/:id` | staff |
+| POST | `/courses/:CourseId/checkin` | staff – opens today's QR check-in |
+| GET | `/sessions/:id/checkin` | staff – current code and who has checked in |
+| POST | `/sessions/:id/finish` | staff – closes check-in, marks the rest absent |
+| POST | `/checkin` | student (rate limited) – `{ token }` from the QR code |
+| GET | `/me/attendance` | student – own day-by-day history |
+| GET / POST | `/courses/:CourseId/assessments` | staff – gradebook |
+| PATCH / DELETE | `/assessments/:id` | staff |
+| PUT | `/assessments/:id/scores` | staff |
+| GET | `/me/grades` | student – own scores, grades and GPA |
+| POST / PATCH / DELETE | `/assignments`, `/assignments/:id` | staff |
+| GET / PUT | `/assignments/:id/submission` | student – own hand-in |
+| GET | `/me/submissions` | student – all own hand-ins |
+| GET | `/assignments/:id/submissions` | staff – everyone in the course, with their hand-in |
+| PATCH | `/submissions/:id/grade` | staff – `{ score, feedback }` |
+| GET | `/submissions/:id/file` | the student who handed it in, or staff |
+| GET | `/announcements` | logged in (students see everyone's + their courses') |
+| POST / PATCH / DELETE | `/announcements`, `/announcements/:id` | staff |
+| GET | `/insights/at-risk`, `/stats/overview` | staff – dashboard insights and charts |
+| GET | `/students/:id/report` | staff – a student's report card |
+| GET | `/me/report` | student – own report card |
+
+"Staff" means admins and teachers; teachers are limited to the courses they're assigned.
 
 Errors are always JSON: `{ "msg": "..." }`. State-changing requests from origins not listed in `CLIENT_URLS` are rejected with 403, and request bodies must be JSON.
 
@@ -200,8 +224,8 @@ Errors are always JSON: `{ "msg": "..." }`. State-changing requests from origins
 ## 🚧 Future Improvements
 
 * Real-time updates (WebSockets)
-* Analytics dashboard (charts, insights)
-* File upload support (assignments, documents)
+* Email or push notifications
+* Parent accounts
 
 ---
 

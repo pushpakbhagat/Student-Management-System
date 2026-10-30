@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
-import { BookOpen, Check, ClipboardList, Plus, Presentation, Trash2, Users } from "lucide-react";
+import { BookOpen, Check, ClipboardList, Plus, Presentation, Trash2, Users, X } from "lucide-react";
 import api, { getErrorMessage } from "../../api";
 import Avatar from "../../components/ui/Avatar";
 import Button from "../../components/ui/Button";
 import { Card, EmptyState, PageHeader } from "../../components/ui/Card";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import { Input } from "../../components/ui/Form";
+import { Input, Select } from "../../components/ui/Form";
 import { Reveal, Stagger } from "../../components/ui/Motion";
 import useAdminStore from "../../store/useAdminStore";
 import { fullName, idOf } from "../../lib/format";
@@ -15,6 +15,10 @@ import { toneFor } from "../../lib/palette";
 import { cn } from "../../lib/cn";
 import { scrollToElement } from "../../lib/smoothScroll";
 import { useFetch } from "../../lib/useFetch";
+import { DAY_NAMES, WEEK_ORDER, blankSlot } from "../../lib/timetable";
+
+// comparable form of a timetable, to tell whether it was edited
+const scheduleKey = (list = []) => JSON.stringify(list.map((s) => [Number(s.day), s.start, s.end, (s.room ?? "").trim()]));
 
 export default function Courses() {
   const courses = useAdminStore((s) => s.courses);
@@ -165,6 +169,7 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
   const [teacherIds, setTeacherIds] = useState(() => new Set(initialTeachers));
   const initial = useMemo(() => new Set(enrolled.map((s) => s._id)), [enrolled]);
   const [selected, setSelected] = useState(() => new Set(initial));
+  const [schedule, setSchedule] = useState(() => (course.schedule ?? []).map((s) => ({ ...s, room: s.room ?? "" })));
   const [saving, setSaving] = useState(false);
   const tone = toneFor(course._id);
   const ref = useRef(null);
@@ -177,7 +182,10 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
   const toAdd = [...selected].filter((sid) => !initial.has(sid));
   const toRemove = [...initial].filter((sid) => !selected.has(sid));
   const teachersChanged = teacherIds.size !== initialTeachers.size || [...teacherIds].some((id) => !initialTeachers.has(id));
-  const changes = toAdd.length + toRemove.length + (teachersChanged ? 1 : 0);
+  const scheduleChanged = scheduleKey(schedule) !== scheduleKey(course.schedule);
+  const changes = toAdd.length + toRemove.length + (teachersChanged ? 1 : 0) + (scheduleChanged ? 1 : 0);
+
+  const editSlot = (index, field, value) => setSchedule((list) => list.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
 
   const toggle = (sid) =>
     setSelected((prev) => {
@@ -188,6 +196,10 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
     });
 
   const save = async () => {
+    if (schedule.some((s) => !s.start || !s.end || s.start >= s.end)) {
+      toast.error("Each class needs to end after it starts.");
+      return;
+    }
     setSaving(true);
     try {
       const updated = [];
@@ -204,7 +216,12 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
         const { data } = await api.put(`/courses/${course._id}/teachers`, { teacherIds: [...teacherIds] });
         updateCourse(data.course);
       }
-      toast.success(`${course.courseName} roster updated`);
+      if (scheduleChanged) {
+        const body = { schedule: schedule.map((s) => ({ day: Number(s.day), start: s.start, end: s.end, room: s.room.trim() })) };
+        const { data } = await api.put(`/courses/${course._id}/schedule`, body);
+        updateCourse(data.course);
+      }
+      toast.success(`${course.courseName} updated`);
       onDone();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -247,6 +264,34 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
               })}
             </div>
           )}
+
+          <p className="text-[13px] font-bold text-ink-soft mb-2">Weekly class times</p>
+          <div className="flex flex-col gap-2 mb-5">
+            {schedule.length === 0 && <p className="text-[13px] text-muted">No class times yet. They show up on everyone's timetable.</p>}
+            <AnimatePresence initial={false}>
+              {schedule.map((slot, i) => (
+                <motion.div key={i} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  className="grid grid-cols-2 sm:grid-cols-[1.3fr_1fr_1fr_1.3fr_auto] gap-2 items-center">
+                  <Select value={slot.day} onChange={(e) => editSlot(i, "day", Number(e.target.value))} aria-label="Day" className="col-span-2 sm:col-span-1">
+                    {WEEK_ORDER.map((d) => <option key={d} value={d}>{DAY_NAMES[d]}</option>)}
+                  </Select>
+                  <Input type="time" value={slot.start} onChange={(e) => editSlot(i, "start", e.target.value)} aria-label="Starts" />
+                  <Input type="time" value={slot.end} onChange={(e) => editSlot(i, "end", e.target.value)} aria-label="Ends" />
+                  <Input value={slot.room} onChange={(e) => editSlot(i, "room", e.target.value)} maxLength={40} placeholder="Room (optional)" aria-label="Room" className="col-span-2 sm:col-span-1 order-last sm:order-none" />
+                  <Button variant="ghost" size="icon" onClick={() => setSchedule((list) => list.filter((_, j) => j !== i))} aria-label="Remove this class" className="hidden sm:inline-flex">
+                    <X size={16} />
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => setSchedule((list) => list.filter((_, j) => j !== i))} className="sm:hidden col-span-2 order-last mb-2">
+                    Remove
+                  </Button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <Button variant="secondary" size="sm" className="self-start" onClick={() => setSchedule((list) => [...list, blankSlot()])} disabled={schedule.length >= 20}>
+              <Plus size={14} aria-hidden="true" /> Add class time
+            </Button>
+          </div>
+
           <p className="text-[13px] font-bold text-ink-soft mb-2">Students</p>
           {students.length === 0 ? (
             <p className="text-[14px] text-muted">Add students first.</p>
@@ -283,7 +328,7 @@ function RosterEditor({ course, enrolled, teachers, onDone }) {
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
             <Button variant="secondary" onClick={onDone} disabled={saving}>Cancel</Button>
             <Button onClick={save} loading={saving} disabled={!changes}>
-              Save roster{changes ? ` · ${changes} change${changes === 1 ? "" : "s"}` : ""}
+              Save{changes ? ` · ${changes} change${changes === 1 ? "" : "s"}` : ""}
             </Button>
           </div>
         </div>

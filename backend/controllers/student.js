@@ -3,6 +3,7 @@ const Student = require("../models/student");
 const Course = require("../models/Courses")
 const AttendanceSession = require("../models/AttendanceSession")
 const Assessment = require("../models/Assessment")
+const Submission = require("../models/Submission")
 const { hashPassword, normalizeEmail, isDemoAccount, CASE_INSENSITIVE } = require("../services/auth")
 const { courseScope, teacherCourseIds } = require("../services/scope")
 const { HttpError, assertValidId, pick, requireFields } = require("../utils/http")
@@ -70,6 +71,7 @@ async function removeStudent(req, res) {
         Course.updateMany({ students: id }, { $pull: { students: id } }),
         AttendanceSession.updateMany({ "records.student": id }, { $pull: { records: { student: id } } }),
         Assessment.updateMany({ "scores.student": id }, { $pull: { scores: { student: id } } }),
+        Submission.deleteMany({ student: id }),
     ])
 
     return res.status(200).json({ status: "deleted", student });

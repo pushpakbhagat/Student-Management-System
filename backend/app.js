@@ -13,6 +13,7 @@ const courseRouter = require("./routes/courseRoutes")
 const assignmentRouter = require("./routes/assignmentRoutes")
 const academicRouter = require("./routes/academicRoutes")
 const insightRouter = require("./routes/insightRoutes")
+const featureRouter = require("./routes/featureRoutes")
 
 // The app is built here and started in index.js, so tests can use it without opening a port
 const app = express()
@@ -35,8 +36,12 @@ app.use(rateLimit({
     message: { msg: "Too many requests. Slow down and try again in a minute." },
 }))
 
-// JSON only: the frontend never sends HTML-form bodies, and refusing them closes off form-based CSRF
-app.use(express.json({ limit: "400kb" }))   // room for an uploaded profile photo
+// JSON only: the frontend never sends HTML-form bodies, and refusing them closes off form-based CSRF.
+// 400kb leaves room for a profile photo; assignment hand-ins (a 2 MB file as base64) get more.
+const UPLOAD_ROUTE = /^\/assignments\/[^/]+\/submission$/
+const jsonBody = express.json({ limit: "400kb" })
+const uploadBody = express.json({ limit: "3mb" })
+app.use((req, res, next) => (UPLOAD_ROUTE.test(req.path) ? uploadBody : jsonBody)(req, res, next))
 app.use(cookieParser())
 
 // ROUTES -------------------------------------------------
@@ -49,6 +54,7 @@ app.use(courseRouter)
 app.use(assignmentRouter)
 app.use(academicRouter)
 app.use(insightRouter)
+app.use(featureRouter)
 
 // ERRORS (must come last) --------------------------------
 app.use(notFound)

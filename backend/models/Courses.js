@@ -25,6 +25,15 @@ const CourseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Admin"
     }],
+
+    // weekly timetable: day 0 = Sunday … 6 = Saturday, times as "HH:MM"
+    schedule: [{
+        _id: false,
+        day: { type: Number, min: 0, max: 6, required: true },
+        start: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/, required: true },
+        end: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/, required: true },
+        room: { type: String, trim: true, maxlength: 40 },
+    }],
 }, {timestamps: true})
 
 

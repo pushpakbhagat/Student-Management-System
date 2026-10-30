@@ -4,6 +4,7 @@ const Assessment = require("../models/Assessment")
 const Assignment = require("../models/Assignment")
 const Announcement = require("../models/Announcement")
 const AttendanceSession = require("../models/AttendanceSession")
+const Submission = require("../models/Submission")
 const { courseScope, teacherCourseIds } = require("../services/scope")
 const { buildReport, recentAbsenceStreaks, pct } = require("../services/report")
 const { computeGrade, letterFor } = require("../services/grades")
@@ -151,12 +152,15 @@ async function notifications(req, res) {
         await req.account.populate("courses.course", "courseName")
         const enrollments = req.account.courses.filter(e => e.course)
         const ids = enrollments.map(e => e.course._id)
-        const [due, news, graded] = await Promise.all([
+        const [due, news, graded, handIns] = await Promise.all([
             Assignment.find({ course: { $in: ids }, dueDate: { $gte: new Date(now - DAY), $lte: soon } }).populate("course", "courseName"),
             Announcement.find({ $or: [{ course: null }, { course: { $in: ids } }], createdAt: { $gte: recent } }),
             Assessment.find({ course: { $in: ids }, "scores.student": req.account._id, updatedAt: { $gte: recent } }).populate("course", "courseName"),
+            Submission.find({ student: req.account._id }, "assignment score feedback gradedAt").populate("assignment", "title"),
         ])
+        const handedIn = new Set(handIns.map(s => String(s.assignment?._id)))
         for (const a of due) {
+            if (handedIn.has(String(a._id))) continue
             items.push({ id: `due-${a._id}`, type: "due", title: `${a.title} is due soon`, body: a.course?.courseName, link: "/student/assignments", at: a.updatedAt })
         }
         for (const e of enrollments) {
@@ -172,18 +176,26 @@ async function notifications(req, res) {
             const score = a.scores.find(s => String(s.student) === String(req.account._id))?.score
             items.push({ id: `grade-${a._id}-${score}`, type: "grade", title: `${a.title} graded: ${score}/${a.maxScore}`, body: a.course?.courseName, link: "/student/grades", at: a.updatedAt })
         }
+        for (const s of handIns) {
+            if (!s.gradedAt || s.gradedAt < recent || !s.assignment) continue
+            items.push({ id: `handin-${s._id}-${s.score}`, type: "grade", title: `${s.assignment.title} graded: ${s.score}/100`, body: s.feedback?.slice(0, 120) || "Open it to see your grade.", link: "/student/assignments", at: s.gradedAt })
+        }
     } else {
         const courses = await scopedCourses(req.user)
         const ids = courses.map(c => c._id)
         const today = new Date()
         today.setUTCHours(0, 0, 0, 0)
         const isWeekday = today.getUTCDay() !== 0 && today.getUTCDay() !== 6
-        const [risk, due, recordedToday, everRecorded] = await Promise.all([
+        const [risk, due, recordedToday, everRecorded, toGrade] = await Promise.all([
             computeAtRisk(req.user),
             Assignment.find({ course: { $in: ids }, dueDate: { $gte: new Date(now - DAY), $lte: soon } }).populate("course", "courseName"),
             AttendanceSession.distinct("course", { course: { $in: ids }, date: today }),
             AttendanceSession.distinct("course", { course: { $in: ids } }),
+            Submission.countDocuments({ course: { $in: ids }, gradedAt: null }),
         ])
+        if (toGrade) {
+            items.push({ id: `to-grade-${toGrade}`, type: "todo", title: `${toGrade} hand-in${toGrade === 1 ? "" : "s"} to grade`, body: "Open an assignment's submissions", link: "/admin/assignments", at: new Date() })
+        }
         const high = risk.filter(r => r.level === "high").length
         if (risk.length) {
             items.push({ id: `risk-${risk.length}-${high}`, type: "risk", title: `${risk.length} student${risk.length === 1 ? " needs" : "s need"} attention`, body: high ? `${high} at high risk` : "Low attendance or grades", link: "/admin/dashboard", at: new Date() })

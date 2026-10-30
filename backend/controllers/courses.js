@@ -6,6 +6,7 @@ const AttendanceSession = require("../models/AttendanceSession")
 const Assessment = require("../models/Assessment")
 const Announcement = require("../models/Announcement")
 const Admin = require("../models/admin")
+const Submission = require("../models/Submission")
 const { HttpError, isValidId, assertValidId } = require("../utils/http")
 
 function newEnrollment(courseId) {
@@ -39,7 +40,7 @@ async function getAllCourses(req, res) {
     }
 
     const enrolledIds = req.account.courses.map(c => c.course)
-    const courses = await Course.find({ _id: { $in: enrolledIds } }, "courseName").sort({ courseName: 1 })
+    const courses = await Course.find({ _id: { $in: enrolledIds } }, "courseName schedule").sort({ courseName: 1 })
     return res.status(200).json({ msg: "Courses fetched", Courses: courses })
 }
 
@@ -62,6 +63,7 @@ async function deleteCourse(req, res) {
         AttendanceSession.deleteMany({ course: CourseId }),
         Assessment.deleteMany({ course: CourseId }),
         Announcement.deleteMany({ course: CourseId }),
+        Submission.deleteMany({ course: CourseId }),
     ])
 
     return res.status(200).json({ msg: "Course deleted", deletedCourse, students })
@@ -168,6 +170,7 @@ async function unenrollStudent(req, res) {
         // their history in this course goes too (the UI warns about this)
         AttendanceSession.updateMany({ course: CourseId }, { $pull: { records: { student: student._id } } }),
         Assessment.updateMany({ course: CourseId }, { $pull: { scores: { student: student._id } } }),
+        Submission.deleteMany({ course: CourseId, student: student._id }),
     ])
 
     return res.status(200).json({ msg: "Student removed from course", Student: student })

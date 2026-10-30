@@ -22,6 +22,7 @@ const Announcements = lazy(() => import("./pages/admin/Announcements"));
 const About = lazy(() => import("./pages/admin/About"));
 const Account = lazy(() => import("./pages/admin/Account"));
 const StaffReport = lazy(() => import("./pages/admin/students/StudentReportPage"));
+const AdminTimetable = lazy(() => import("./pages/admin/Timetable"));
 
 const StudentLayout = lazy(() => import("./pages/student/StudentLayout"));
 const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
@@ -31,6 +32,8 @@ const StudentSettings = lazy(() => import("./pages/student/StudentSettings"));
 const StudentGrades = lazy(() => import("./pages/student/StudentGrades"));
 const StudentAnnouncements = lazy(() => import("./pages/student/StudentAnnouncements"));
 const MyReport = lazy(() => import("./pages/student/MyReport"));
+const CheckIn = lazy(() => import("./pages/student/CheckIn"));
+const StudentTimetable = lazy(() => import("./pages/student/StudentTimetable"));
 
 export default function App() {
   const restore = useSessionStore((s) => s.restore);
@@ -56,6 +59,7 @@ export default function App() {
           <Route path="students/:id/edit" element={<AdminOnly><StudentFormPage /></AdminOnly>} />
           <Route path="students/:id/report" element={<StaffReport />} />
           <Route path="courses" element={<AdminOnly><Courses /></AdminOnly>} />
+          <Route path="timetable" element={<AdminTimetable />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="assignments" element={<AdminAssignments />} />
           <Route path="grades" element={<Grades />} />
@@ -67,11 +71,13 @@ export default function App() {
         <Route path="/student" element={<RequireRole roles={["student"]}><StudentLayout /></RequireRole>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<StudentDashboard />} />
+          <Route path="timetable" element={<StudentTimetable />} />
           <Route path="attendance" element={<StudentAttendance />} />
           <Route path="assignments" element={<StudentAssignments />} />
           <Route path="grades" element={<StudentGrades />} />
           <Route path="announcements" element={<StudentAnnouncements />} />
           <Route path="report" element={<MyReport />} />
+          <Route path="checkin" element={<CheckIn />} />
           <Route path="settings" element={<StudentSettings />} />
         </Route>
 

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
-import { BookOpen, CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, Download, History, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, Download, History, Pencil, QrCode, Trash2 } from "lucide-react";
 import api, { getErrorMessage } from "../../api";
 import Avatar from "../../components/ui/Avatar";
 import Button from "../../components/ui/Button";
@@ -12,6 +12,7 @@ import { Badge, ProgressBar, Spinner } from "../../components/ui/Feedback";
 import { Input } from "../../components/ui/Form";
 import { Reveal, Stagger } from "../../components/ui/Motion";
 import CourseTabs from "../../components/CourseTabs";
+import LiveCheckin from "../../components/LiveCheckin";
 import useAdminStore from "../../store/useAdminStore";
 import { useFetch } from "../../lib/useFetch";
 import { attendanceTone, formatDay, fullName, idOf, percent, shiftDay, toDateInput, todayInput } from "../../lib/format";
@@ -23,6 +24,7 @@ export default function Attendance() {
   const courses = useAdminStore((s) => s.courses);
   const [courseId, setCourseId] = useState(() => courses[0]?._id ?? null);
   const [day, setDay] = useState(todayInput);
+  const [live, setLive] = useState(false);
   const sessions = useFetch(courseId ? `/courses/${courseId}/sessions` : null);
 
   if (courses.length === 0) {
@@ -39,10 +41,27 @@ export default function Attendance() {
 
   const list = sessions.data?.sessions ?? [];
   const existing = list.find((s) => toDateInput(s.date) === day);
+  const course = courses.find((c) => c._id === courseId);
+
+  // whether finished or just closed, today's record may have changed: show it fresh
+  const closeLive = () => {
+    setLive(false);
+    setDay(todayInput());
+    sessions.reload();
+  };
 
   return (
     <>
-      <PageHeader eyebrow="Manage" title="Attendance" description="Pick a course and a day, mark everyone, then save. Past days can be edited any time." />
+      <PageHeader
+        eyebrow="Manage"
+        title="Attendance"
+        description="Pick a course and a day, mark everyone, then save. Or put a QR code on the screen and let students check themselves in."
+        actions={course && <Button onClick={() => setLive(true)}><QrCode size={17} aria-hidden="true" /> QR check-in</Button>}
+      />
+
+      <AnimatePresence>
+        {live && course && <LiveCheckin key={course._id} course={course} onClose={closeLive} onFinished={closeLive} />}
+      </AnimatePresence>
 
       <CourseTabs courses={courses} value={courseId} onChange={setCourseId} />
 

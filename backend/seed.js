@@ -83,9 +83,20 @@ const seedDatabase = async () => {
 
         // ── Seed Courses ─────────────────────────────
         const courses = await Course.insertMany([
-            { courseName: "Mathematics" },
-            { courseName: "Physics" },
-            { courseName: "Computer Science" },
+            { courseName: "Mathematics", schedule: [
+                { day: 1, start: "09:00", end: "10:00", room: "A-101" },
+                { day: 3, start: "09:00", end: "10:00", room: "A-101" },
+                { day: 5, start: "11:00", end: "12:00", room: "A-101" },
+            ] },
+            { courseName: "Physics", schedule: [
+                { day: 2, start: "10:00", end: "11:30", room: "Lab B-204" },
+                { day: 4, start: "14:00", end: "15:30", room: "Lab B-204" },
+            ] },
+            { courseName: "Computer Science", schedule: [
+                { day: 1, start: "13:00", end: "14:30", room: "Lab C-3" },
+                { day: 3, start: "13:00", end: "14:30", room: "Lab C-3" },
+                { day: 5, start: "09:00", end: "10:30", room: "Lab C-3" },
+            ] },
         ]);
         console.log("✅ Courses created");
 

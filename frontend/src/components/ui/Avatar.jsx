@@ -4,6 +4,7 @@ import { initials } from "../../lib/format";
 import { toneFor } from "../../lib/palette";
 
 const SIZES = {
+  xs: "w-7 h-7 text-[10px]",
   sm: "w-9 h-9 text-[12px]",
   md: "w-11 h-11 text-[14px]",
   lg: "w-16 h-16 text-[20px]",

@@ -390,6 +390,94 @@ test("insights: at-risk students, chart data, report cards and notifications", a
     assert.equal((await wesAgent.get(`/students/${weak._id}/report`)).status, 403)
 })
 
+test("assignment submissions: hand in, validate files, grade, download", async () => {
+    const course = (await adminAgent.post("/courses").send({ courseName: "Lab 1" })).body.course
+    const wes = (await adminAgent.get("/students")).body.find(s => s.email === "wes@test.com")
+    await adminAgent.post("/enrollcourse").send({ StudentId: wes._id, CourseId: course._id })
+    const assignment = (await adminAgent.post("/assignments").send({ CourseId: course._id, title: "Lab report", dueDate: "2030-06-01" })).body.assignment
+
+    const wesAgent = request.agent(app)
+    await wesAgent.post("/logininfo").send({ email: "wes@test.com", password: student.password, role: "student" })
+    const url = `/assignments/${assignment._id}/submission`
+    const pdf = Buffer.from("%PDF-1.4 tiny test file").toString("base64")
+
+    assert.equal((await wesAgent.put(url).send({})).status, 400)
+    assert.equal((await wesAgent.put(url).send({ file: { name: "x.html", type: "text/html", data: pdf } })).status, 400)
+    const tooBig = Buffer.alloc(2.2 * 1024 * 1024).toString("base64")
+    assert.equal((await wesAgent.put(url).send({ file: { name: "big.pdf", type: "application/pdf", data: tooBig } })).status, 400)
+
+    const sent = await wesAgent.put(url).send({ text: "My findings", file: { name: "report.pdf", type: "application/pdf", data: pdf } })
+    assert.equal(sent.status, 200)
+    assert.equal(sent.body.submission.file.data, undefined)
+    assert.equal(sent.body.submission.late, false)
+
+    const rows = (await adminAgent.get(`/assignments/${assignment._id}/submissions`)).body.rows
+    const row = rows.find(r => r.student.email === "wes@test.com")
+    assert.equal(row.submission.file.name, "report.pdf")
+    const staffBell = (await adminAgent.get("/me/notifications")).body.notifications
+    assert.ok(staffBell.some(n => /hand-ins? to grade/.test(n.title)))
+
+    const file = await adminAgent.get(`/submissions/${row.submission._id}/file`)
+    assert.equal(file.status, 200)
+    assert.match(file.headers["content-type"], /application\/pdf/)
+    assert.match(file.headers["content-disposition"], /attachment/)
+    assert.equal((await wesAgent.get(`/submissions/${row.submission._id}/file`)).status, 200)
+    assert.equal((await adminAgent.patch(`/submissions/${row.submission._id}/grade`).send({ score: 120 })).status, 400)
+    assert.equal((await adminAgent.patch(`/submissions/${row.submission._id}/grade`).send({ score: 85, feedback: "Nice work" })).status, 200)
+    assert.equal((await wesAgent.put(url).send({ text: "changed my mind" })).status, 409)
+    assert.equal((await wesAgent.get(url)).body.submission.score, 85)
+    const studentBell = (await wesAgent.get("/me/notifications")).body.notifications
+    assert.ok(studentBell.some(n => n.title === "Lab report graded: 85/100" && n.body === "Nice work"))
+})
+
+test("QR check-in: rotating code, one tap to check in, finish marks the rest absent", async () => {
+    const course = (await adminAgent.post("/courses").send({ courseName: "QR 101" })).body.course
+    const all = (await adminAgent.get("/students")).body
+    const wes = all.find(s => s.email === "wes@test.com")
+    const other = all.find(s => s.email === student.email)
+    await adminAgent.patch("/enrollmultiplestudents").send({ CourseId: course._id, StudentsIds: [wes._id, other._id] })
+
+    const opened = await adminAgent.post(`/courses/${course._id}/checkin`).send({ date: "2030-07-01" })
+    assert.equal(opened.status, 200)
+    assert.ok(opened.body.token)
+    assert.equal(opened.body.roster.length, 2)
+
+    const wesAgent = request.agent(app)
+    await wesAgent.post("/logininfo").send({ email: "wes@test.com", password: student.password, role: "student" })
+    assert.equal((await wesAgent.post("/checkin").send({ token: "forged.123.abc" })).status, 400)
+    const tampered = opened.body.token.replace(/.$/, (c) => (c === "A" ? "B" : "A"))
+    assert.equal((await wesAgent.post("/checkin").send({ token: tampered })).status, 400)
+
+    const ok = await wesAgent.post("/checkin").send({ token: opened.body.token })
+    assert.equal(ok.status, 200)
+    assert.equal(ok.body.status, "present")
+    assert.equal((await wesAgent.post("/checkin").send({ token: opened.body.token })).body.already, true)
+
+    const finished = await adminAgent.post(`/sessions/${opened.body.session._id}/finish`)
+    assert.equal(finished.body.markedAbsent, 1)
+    const counters = (id) => finished.body.students.find(s => s._id === id).courses.find(e => e.course === course._id)
+    assert.deepEqual([counters(wes._id).attendedClasses, counters(wes._id).totalClasses], [1, 1])
+    assert.deepEqual([counters(other._id).attendedClasses, counters(other._id).totalClasses], [0, 1])
+    assert.equal((await wesAgent.post("/checkin").send({ token: opened.body.token })).status, 400)
+})
+
+test("timetable: weekly slots are validated and students can read them", async () => {
+    const course = (await adminAgent.post("/courses").send({ courseName: "Timetabled" })).body.course
+    const url = `/courses/${course._id}/schedule`
+    assert.equal((await adminAgent.put(url).send({ schedule: [{ day: 1, start: "25:00", end: "26:00" }] })).status, 400)
+    assert.equal((await adminAgent.put(url).send({ schedule: [{ day: 1, start: "11:00", end: "10:00" }] })).status, 400)
+    const ok = await adminAgent.put(url).send({ schedule: [{ day: 1, start: "09:00", end: "10:30", room: "B-12" }, { day: 3, start: "14:00", end: "15:00" }] })
+    assert.equal(ok.status, 200)
+    assert.equal(ok.body.course.schedule.length, 2)
+
+    const wes = (await adminAgent.get("/students")).body.find(s => s.email === "wes@test.com")
+    await adminAgent.post("/enrollcourse").send({ StudentId: wes._id, CourseId: course._id })
+    const wesAgent = request.agent(app)
+    await wesAgent.post("/logininfo").send({ email: "wes@test.com", password: student.password, role: "student" })
+    const mine = (await wesAgent.get("/courses")).body.Courses.find(c => c.courseName === "Timetabled")
+    assert.equal(mine.schedule[0].room, "B-12")
+})
+
 test("logout clears the cookie and unknown routes return 404 JSON", async () => {
     const res = await studentAgent.post("/logout")
     assert.equal(res.status, 200)

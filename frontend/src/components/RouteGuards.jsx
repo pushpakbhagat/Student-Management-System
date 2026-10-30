@@ -9,7 +9,7 @@ export function RequireRole({ roles, children }) {
   const location = useLocation();
 
   if (status === "loading") return <FullPageLoader />;
-  if (status !== "authenticated") return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  if (status !== "authenticated") return <Navigate to="/" replace state={{ from: location.pathname + location.search }} />;
   if (!roles.includes(currentRole)) return <Navigate to={homeFor(currentRole)} replace />;
   return children;
 }

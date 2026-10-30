@@ -20,6 +20,11 @@ const AttendanceSessionSchema = new mongoose.Schema({
         trim: true,
         maxlength: 200,
     },
+    // true while a live QR check-in is running for this class
+    checkinOpen: {
+        type: Boolean,
+        default: false,
+    },
     records: [
         {
             _id: false,

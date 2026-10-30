@@ -1,5 +1,6 @@
 const Course = require("../models/Courses")
 const Assignment = require("../models/Assignment")
+const Submission = require("../models/Submission")
 const { assertCourseAccess, courseScope } = require("../services/scope")
 const { HttpError, assertValidId, pick } = require("../utils/http")
 
@@ -102,6 +103,7 @@ async function deleteAssignment(req, res) {
     }
     await assertCourseAccess(req.user, assignment.course)
     await assignment.deleteOne()
+    await Submission.deleteMany({ assignment: assignment._id })
 
     await Course.updateOne(
         { _id: assignment.course },

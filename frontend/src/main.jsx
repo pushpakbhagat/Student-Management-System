@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ThemedToaster from "./components/ThemedToaster";
 import App from "./App.jsx";
 import "./index.css";
+import { registerServiceWorker } from "./lib/pwa";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -20,3 +21,4 @@ createRoot(document.getElementById("root")).render(
     </ErrorBoundary>
   </StrictMode>
 );
+registerServiceWorker();

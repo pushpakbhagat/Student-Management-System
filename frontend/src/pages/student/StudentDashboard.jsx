@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertTriangle, ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, Megaphone, PartyPopper, Trophy } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BookOpen, CalendarCheck, CalendarClock, ClipboardList, Megaphone, PartyPopper, Trophy } from "lucide-react";
 import { Card, CardHeader, EmptyState, StatCard } from "../../components/ui/Card";
 import { Badge, Ring } from "../../components/ui/Feedback";
 import { InView, Reveal, Stagger } from "../../components/ui/Motion";
@@ -11,6 +11,7 @@ import { useFetch } from "../../lib/useFetch";
 import { ATTENDANCE_TARGET, attendanceOf, attendanceTone, classesNeeded, daysUntil, dueLabel, greeting, idOf, percent } from "../../lib/format";
 import { STATUS, toneFor } from "../../lib/palette";
 import { cn } from "../../lib/cn";
+import { classState, classesByDay, formatTime } from "../../lib/timetable";
 
 const linkClass = "inline-flex items-center gap-1 text-[13px] font-semibold text-violet-600 hover:text-fuchsia-600 transition-colors";
 
@@ -65,6 +66,8 @@ export default function StudentDashboard() {
           </Link>
         </Reveal>
       </Stagger>
+
+      <TodaysClasses />
 
       {lowCourses.length > 0 && (
         <InView>
@@ -161,5 +164,43 @@ export default function StudentDashboard() {
         </InView>
       </div>
     </>
+  );
+}
+
+// A strip of today's classes from the timetable (hidden on days without any)
+function TodaysClasses() {
+  const { data } = useFetch("/courses");
+  const now = new Date();
+  const today = data ? classesByDay(data.Courses)[now.getDay()] : [];
+  if (today.length === 0) return null;
+
+  return (
+    <InView className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="flex items-center gap-2 text-[18px] font-bold text-ink"><CalendarClock size={18} className="text-violet-500" aria-hidden="true" /> Today's classes</h2>
+        <Link to="/student/timetable" className={linkClass}>Week <ArrowUpRight size={15} /></Link>
+      </div>
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto pb-1" data-lenis-prevent>
+        <ul className="flex gap-3 w-max">
+          {today.map(({ course, slot }) => {
+            const state = classState(slot, now);
+            const tone = toneFor(course._id);
+            return (
+              <li key={`${course._id}-${slot.start}`}
+                className={cn("relative overflow-hidden w-56 rounded-3xl bg-surface border border-line p-4 pl-5 shadow-soft", state === "done" && "opacity-55")}>
+                <span className={cn("absolute left-0 top-0 bottom-0 w-1.5 bg-linear-to-b", tone.gradient)} aria-hidden="true" />
+                <p className="text-[12px] font-semibold text-muted tabular-nums">{formatTime(slot.start)} – {formatTime(slot.end)}</p>
+                <p className="text-[16px] font-bold text-ink truncate">{course.courseName}</p>
+                <p className="text-[12px] text-ink-soft mt-0.5">
+                  {slot.room || "Room TBA"}
+                  {state === "now" && <Badge tone="good" className="ml-2">Now</Badge>}
+                  {state === "done" && <span className="ml-2 text-muted">· done</span>}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </InView>
   );
 }
