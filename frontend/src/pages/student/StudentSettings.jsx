@@ -1,6 +1,7 @@
 import { BookOpen, Mail, UserRound } from "lucide-react";
 import Avatar from "../../components/ui/Avatar";
 import ChangePasswordForm from "../../components/ChangePasswordForm";
+import MyPhotoCard from "../../components/MyPhotoCard";
 import { Card, PageHeader } from "../../components/ui/Card";
 import { Reveal, Stagger } from "../../components/ui/Motion";
 import usePortalStore from "../../store/usePortalStore";
@@ -32,7 +33,8 @@ export default function StudentSettings() {
           </Card>
         </Reveal>
 
-        <Reveal className="lg:col-span-2">
+        <Reveal className="lg:col-span-2 flex flex-col gap-5">
+          <MyPhotoCard />
           <ChangePasswordForm />
         </Reveal>
       </Stagger>

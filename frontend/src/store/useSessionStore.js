@@ -22,6 +22,18 @@ const useSessionStore = create((set, get) => ({
 
   login: async ({ email, password, role }) => {
     const { data } = await api.post("/logininfo", { email, password, role });
+    get().startSession(role, data);
+    return role;
+  },
+
+  // one-click login into the shared demo accounts (only offered when the server is in demo mode)
+  demoLogin: async (role) => {
+    const { data } = await api.post("/demo-login", { role });
+    get().startSession(role, data);
+    return role;
+  },
+
+  startSession: (role, data) => {
     if (role === "admin") {
       const { admin, StudentData, courseData, assignmentData } = data.Data;
       useAdminStore.getState().hydrate({ students: StudentData, courses: courseData, assignments: assignmentData });
@@ -29,8 +41,10 @@ const useSessionStore = create((set, get) => ({
     } else {
       set({ status: "authenticated", role, user: data.student });
     }
-    return role;
   },
+
+  // e.g. after changing your own photo
+  updateUser: (changes) => set((state) => ({ user: { ...state.user, ...changes } })),
 
   logout: async () => {
     try {

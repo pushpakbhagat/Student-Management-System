@@ -142,7 +142,7 @@ export default function Assignments() {
                       "h-9 px-4 rounded-full text-[13px] font-semibold whitespace-nowrap transition-all",
                       active
                         ? cn("text-white shadow-soft bg-linear-to-r", tone ? tone.gradient : "from-violet-600 to-fuchsia-500")
-                        : "bg-white border border-line text-ink-soft hover:border-violet-200"
+                        : "bg-surface border border-line text-ink-soft hover:border-violet-200"
                     )}
                   >
                     {c.courseName}

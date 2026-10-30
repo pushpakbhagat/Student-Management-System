@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import api, { getErrorMessage } from "../../../api";
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
@@ -13,6 +13,7 @@ import { Reveal, Stagger } from "../../../components/ui/Motion";
 import useAdminStore from "../../../store/useAdminStore";
 import { attendanceOf, attendanceTone, fullName, idOf } from "../../../lib/format";
 import { buttonClass } from "../../../lib/buttonStyles";
+import { dateStamp, downloadCsv } from "../../../lib/csv";
 import { toneFor } from "../../../lib/palette";
 
 const PAGE_SIZE = 10;
@@ -53,6 +54,19 @@ export default function StudentsPage() {
     }
   };
 
+  // exports what's currently filtered (all students when the search box is empty)
+  const exportCsv = () => {
+    downloadCsv(
+      `students-${dateStamp()}.csv`,
+      ["First name", "Last name", "Email", "Gender", "Courses", "Classes attended", "Classes total", "Attendance %"],
+      filtered.map((s) => {
+        const att = attendanceOf(s.courses);
+        const names = (s.courses || []).map((e) => courseName.get(idOf(e.course))).filter(Boolean).join("; ");
+        return [s.firstName, s.lastName, s.email, s.gender, names, att.attended, att.total, att.total ? att.pct : ""];
+      })
+    );
+  };
+
   return (
     <>
       <PageHeader
@@ -60,9 +74,14 @@ export default function StudentsPage() {
         title="Students"
         description={`${students.length} student${students.length === 1 ? "" : "s"} registered`}
         actions={
-          <Link to="/admin/students/new" className={buttonClass()}>
-            <Plus size={18} aria-hidden="true" /> Add student
-          </Link>
+          <>
+            <Button variant="secondary" onClick={exportCsv} disabled={!students.length}>
+              <Download size={17} aria-hidden="true" /> Export CSV
+            </Button>
+            <Link to="/admin/students/new" className={buttonClass()}>
+              <Plus size={18} aria-hidden="true" /> Add student
+            </Link>
+          </>
         }
       />
 
@@ -87,8 +106,8 @@ export default function StudentsPage() {
           />
         ) : (
           <>
-            {/* Table on tablets and up */}
-            <table className="hidden md:table w-full text-left">
+            {/* Table on wide screens */}
+            <table className="hidden xl:table w-full text-left">
               <thead>
                 <tr className="text-[12px] font-bold uppercase tracking-wider text-muted border-b border-line">
                   <th scope="col" className="px-6 py-4">Student</th>
@@ -124,8 +143,8 @@ export default function StudentsPage() {
               </Stagger>
             </table>
 
-            {/* Cards on phones */}
-            <Stagger as="ul" className="md:hidden divide-y divide-line" key={`m-${currentPage}-${query}`}>
+            {/* Cards on phones, tablets and laptops */}
+            <Stagger as="ul" className="xl:hidden divide-y divide-line" key={`m-${currentPage}-${query}`}>
               {visible.map((s) => {
                 const att = attendanceOf(s.courses);
                 return (

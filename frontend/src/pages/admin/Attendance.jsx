@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { BookOpen, CalendarCheck, Check, CheckCheck, X } from "lucide-react";
+import { BookOpen, CalendarCheck, Check, CheckCheck, Download, X } from "lucide-react";
+import { dateStamp, downloadCsv } from "../../lib/csv";
 import api, { getErrorMessage } from "../../api";
 import Avatar from "../../components/ui/Avatar";
 import Button from "../../components/ui/Button";
@@ -45,6 +46,18 @@ export default function Attendance() {
 
   const markEveryone = (value) =>
     setMarked(Object.fromEntries(roster.map(({ student }) => [student._id, value])));
+
+  const exportCsv = () => {
+    const name = courses.find((c) => c._id === courseId)?.courseName ?? "course";
+    downloadCsv(
+      `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-attendance-${dateStamp()}.csv`,
+      ["Student", "Email", "Classes attended", "Classes total", "Attendance %", "Marks"],
+      roster.map(({ student, enrollment }) => [
+        fullName(student), student.email, enrollment.attendedClasses, enrollment.totalClasses,
+        enrollment.totalClasses ? percent(enrollment.attendedClasses, enrollment.totalClasses) : "", enrollment.marks,
+      ])
+    );
+  };
 
   const toggle = (sid, value) => setMarked((m) => ({ ...m, [sid]: m[sid] === value ? undefined : value }));
 
@@ -113,7 +126,7 @@ export default function Attendance() {
                 onClick={() => selectCourse(c._id)}
                 className={cn(
                   "relative h-11 px-5 rounded-2xl text-[14px] font-semibold whitespace-nowrap transition-colors",
-                  active ? "text-white" : "bg-white text-ink-soft border border-line hover:border-violet-200 shadow-soft"
+                  active ? "text-white" : "bg-surface text-ink-soft border border-line hover:border-violet-200 shadow-soft"
                 )}
               >
                 {active && (
@@ -146,6 +159,9 @@ export default function Attendance() {
             </Button>
             <Button variant="secondary" size="sm" onClick={() => markEveryone("absent")}>
               <X size={15} className="text-rose-500" aria-hidden="true" /> All absent
+            </Button>
+            <Button variant="secondary" size="sm" onClick={exportCsv} aria-label="Export this course to CSV">
+              <Download size={15} className="text-violet-500" aria-hidden="true" /> Export
             </Button>
           </div>
 
@@ -244,7 +260,7 @@ function AttendanceToggle({ label, icon: Icon, active, tone, onClick }) {
         "inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl text-[14px] font-semibold transition-all duration-200",
         active && tone === "good" && "bg-linear-to-r from-emerald-400 to-teal-500 text-white shadow-[0_8px_20px_-6px_rgb(16_185_129/0.55)]",
         active && tone === "bad" && "bg-linear-to-r from-rose-400 to-pink-500 text-white shadow-[0_8px_20px_-6px_rgb(244_63_94/0.55)]",
-        !active && "bg-white text-ink-soft border border-line hover:border-violet-200"
+        !active && "bg-surface text-ink-soft border border-line hover:border-violet-200"
       )}
     >
       <Icon size={16} strokeWidth={2.5} aria-hidden="true" />

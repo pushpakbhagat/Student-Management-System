@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { BookOpen, CalendarCheck, ClipboardList, Sparkles } from "lucide-react";
 import Logo from "../ui/Logo";
+import ThemeToggle from "../ThemeToggle";
 import BackgroundDecor from "./BackgroundDecor";
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -11,6 +12,7 @@ export default function AuthLayout({ children }) {
   return (
     <div className="min-h-dvh flex lg:p-4 gap-4">
       <BackgroundDecor />
+      <ThemeToggle className="fixed top-4 right-4 z-30 bg-surface/70 backdrop-blur border border-line shadow-soft max-lg:bg-white/15 max-lg:border-white/25 max-lg:text-white" />
 
       <Showcase />
 
@@ -29,7 +31,7 @@ export default function AuthLayout({ children }) {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: EASE }}
-            className="w-full max-w-[420px] bg-white rounded-[32px] border border-line shadow-lift p-6 sm:p-9 lg:bg-white/80 lg:backdrop-blur-xl"
+            className="w-full max-w-[420px] bg-surface rounded-[32px] border border-line shadow-lift p-6 sm:p-9 lg:bg-surface/80 lg:backdrop-blur-xl"
           >
             {children}
           </motion.div>

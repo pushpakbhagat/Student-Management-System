@@ -79,7 +79,7 @@ export function Ring({ value, size = 96, stroke = 10, color = "#7c3aed", colorTo
             <stop offset="100%" stopColor={colorTo ?? color} />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1edfb" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-line)" strokeWidth={stroke} />
         {clamped > 0 && (
           <motion.circle
             cx={size / 2}

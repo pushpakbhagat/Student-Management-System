@@ -1,4 +1,5 @@
 const bcrypt = require("bcrypt")
+const env = require("../config/env")
 const Student = require("../models/student")
 const Admin = require("../models/admin")
 const Course = require("../models/Courses")
@@ -12,11 +13,28 @@ const {
     modelForRole,
     normalizeEmail,
     findByEmail,
+    isDemoAccount,
     COOKIE_NAME,
 } = require("../services/auth")
 const { HttpError, pick, requireFields } = require("../utils/http")
 
 const ADMIN_FIELDS = ["firstName", "lastName", "gender", "email", "password", "imgURL"]
+
+// Sets the cookie and sends what each role's app needs to start
+async function startSession(res, user, role) {
+    setAuthCookie(res, generateToken(user, role))
+
+    if (role === "student") {
+        return res.status(200).json({ student: user })
+    }
+
+    const [StudentData, courseData, assignmentData] = await Promise.all([
+        Student.find({}).sort({ createdAt: -1 }),
+        Course.find({}).sort({ courseName: 1 }),
+        Assignment.find({}),
+    ])
+    return res.status(200).json({ Data: { admin: user, StudentData, courseData, assignmentData } })
+}
 
 // LOGIN --------------------------------------------------------------------------
 async function handleLogin(req, res) {
@@ -37,18 +55,19 @@ async function handleLogin(req, res) {
         throw new HttpError(401, "Wrong email or password")
     }
 
-    setAuthCookie(res, generateToken(user, role))
+    return startSession(res, user, role)
+}
 
-    if (role === "student") {
-        return res.status(200).json({ student: user })
-    }
+// One-click login into the demo accounts, only when DEMO_MODE=true
+async function handleDemoLogin(req, res) {
+    if (!env.demoMode) throw new HttpError(404, "Demo mode is off")
+    const role = req.body?.role
+    const Model = modelForRole(role)
+    if (!Model) throw new HttpError(400, "Choose the admin or student demo")
 
-    const [StudentData, courseData, assignmentData] = await Promise.all([
-        Student.find({}),
-        Course.find({}),
-        Assignment.find({}),
-    ])
-    return res.status(200).json({ Data: { admin: user, StudentData, courseData, assignmentData } })
+    const user = await findByEmail(Model, env.demoAccounts[role])
+    if (!user) throw new HttpError(404, "The demo account doesn't exist yet. Run the seed script.")
+    return startSession(res, user, role)
 }
 
 function handleLogout(req, res) {
@@ -70,6 +89,9 @@ async function getMe(req, res) {
 }
 
 async function changePassword(req, res) {
+    if (isDemoAccount(req.account)) {
+        throw new HttpError(403, "The demo account's password can't be changed")
+    }
     const { currentPassword, newPassword } = req.body ?? {}
     if (typeof currentPassword !== "string" || !currentPassword) {
         throw new HttpError(400, "Enter your current password")
@@ -91,12 +113,20 @@ async function changePassword(req, res) {
     return res.status(200).json({ msg: "Password changed" })
 }
 
+// Anyone can change (or remove) their own profile photo
+async function updateMyPhoto(req, res) {
+    const imgURL = typeof req.body?.imgURL === "string" ? req.body.imgURL.trim() : ""
+    req.account.imgURL = imgURL
+    await req.account.save()
+    return res.status(200).json({ user: req.account })
+}
+
 // ADMIN SIGN-UP ------------------------------------------------------------------
 // Open only while there are no admins yet (first-time setup). After that, only a
 // logged-in admin can create another admin.
 async function getSetupStatus(req, res) {
     const adminExists = await Admin.exists({})
-    return res.status(200).json({ adminSignupOpen: !adminExists })
+    return res.status(200).json({ adminSignupOpen: !adminExists, demo: env.demoMode })
 }
 
 async function handleNewAdmin(req, res) {
@@ -119,10 +149,12 @@ async function handleNewAdmin(req, res) {
 
 module.exports = {
     handleLogin,
+    handleDemoLogin,
     handleLogout,
     checkAuth,
     getMe,
     changePassword,
+    updateMyPhoto,
     getSetupStatus,
     handleNewAdmin,
 }

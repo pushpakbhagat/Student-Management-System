@@ -25,6 +25,13 @@ function findByEmail(Model, email) {
     return Model.findOne({ email: normalizeEmail(email) }).collation(CASE_INSENSITIVE)
 }
 
+// In demo mode the shared demo logins are protected, so visitors can't lock each other out
+function isDemoAccount(account) {
+    if (!env.demoMode || !account?.email) return false
+    const email = normalizeEmail(account.email)
+    return Object.values(env.demoAccounts).some(demo => normalizeEmail(demo) === email)
+}
+
 // Only identify the user in the token - never put the password (or its hash) in here
 function generateToken(user, role) {
     const payload = {
@@ -95,6 +102,7 @@ module.exports = {
     modelForRole,
     normalizeEmail,
     findByEmail,
+    isDemoAccount,
     generateToken,
     verifyToken,
     findAccountForToken,

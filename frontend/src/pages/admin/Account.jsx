@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ShieldPlus } from "lucide-react";
 import api, { getErrorMessage } from "../../api";
 import ChangePasswordForm from "../../components/ChangePasswordForm";
+import MyPhotoCard from "../../components/MyPhotoCard";
 import Button from "../../components/ui/Button";
 import { Card, CardHeader, PageHeader } from "../../components/ui/Card";
 import { Field, FormError, Input, Select } from "../../components/ui/Form";
@@ -15,7 +16,10 @@ export default function Account() {
     <>
       <PageHeader eyebrow="Account" title="Settings" description="Keep your account secure and invite other admins." />
       <Stagger className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-        <Reveal><ChangePasswordForm /></Reveal>
+        <div className="flex flex-col gap-5">
+          <Reveal><MyPhotoCard /></Reveal>
+          <Reveal><ChangePasswordForm /></Reveal>
+        </div>
         <Reveal><AddAdminForm /></Reveal>
       </Stagger>
     </>

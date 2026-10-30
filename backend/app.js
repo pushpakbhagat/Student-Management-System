@@ -34,7 +34,7 @@ app.use(rateLimit({
 }))
 
 // JSON only: the frontend never sends HTML-form bodies, and refusing them closes off form-based CSRF
-app.use(express.json({ limit: "100kb" }))
+app.use(express.json({ limit: "400kb" }))   // room for an uploaded profile photo
 app.use(cookieParser())
 
 // ROUTES -------------------------------------------------

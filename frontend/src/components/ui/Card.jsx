@@ -99,7 +99,7 @@ export function StatCard({ label, value, suffix = "", sub, icon: Icon, tone = "v
         <p className="text-[12px] font-semibold text-muted">{label}</p>
         {Icon && (
           <div className={cn("w-11 h-11 rounded-2xl bg-linear-to-br p-[1.5px] shadow-soft", t.ring)}>
-            <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center">
+            <div className="w-full h-full rounded-[14px] bg-surface flex items-center justify-center">
               <Icon size={19} className={t.icon} aria-hidden="true" />
             </div>
           </div>

@@ -29,7 +29,7 @@ export default function ConfirmDialog({
         e.preventDefault();
         if (!busy) onCancel();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-white border border-line p-0 text-ink shadow-lift
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-[28px] bg-surface border border-line p-0 text-ink shadow-lift
         backdrop:bg-ink/30 backdrop:backdrop-blur-sm
         opacity-0 scale-95 transition-all duration-200 open:opacity-100 open:scale-100 starting:open:opacity-0 starting:open:scale-95"
     >

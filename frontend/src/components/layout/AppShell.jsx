@@ -1,22 +1,41 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { CalendarDays, LogOut, Menu, X } from "lucide-react";
+import { CalendarDays, LogOut, Menu, Search, X } from "lucide-react";
 import useSessionStore from "../../store/useSessionStore";
 import { fullName } from "../../lib/format";
 import { cn } from "../../lib/cn";
 import { lockScroll, scrollToTop } from "../../lib/smoothScroll";
 import Avatar from "../ui/Avatar";
 import Logo from "../ui/Logo";
+import { ErrorState } from "../ui/Feedback";
+import { PageSkeleton } from "../ui/Skeleton";
+import CommandPalette from "../CommandPalette";
+import ThemeToggle from "../ThemeToggle";
 import BackgroundDecor from "./BackgroundDecor";
 
 const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" });
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 // Shared frame for the admin and student areas:
 // floating glass sidebar on large screens, spring-animated drawer on phones/tablets.
-export default function AppShell({ nav, portalName }) {
+// While `status` is "loading" the page area shows a skeleton; "error" shows a retry.
+export default function AppShell({ nav, portalName, status = "ready", onRetry }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const location = useLocation();
+
+  // Ctrl/⌘ + K opens the command palette from anywhere
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // close the drawer after navigating
   const [lastPath, setLastPath] = useState(location.pathname);
@@ -63,7 +82,7 @@ export default function AppShell({ nav, portalName }) {
               exit={{ opacity: 0 }}
             />
             <motion.aside
-              className="absolute top-3 bottom-3 left-3 w-[min(19rem,calc(100vw-1.5rem))] rounded-[28px] bg-white/95 backdrop-blur-xl border border-white shadow-lift flex"
+              className="absolute top-3 bottom-3 left-3 w-[min(19rem,calc(100vw-1.5rem))] rounded-[28px] bg-surface/95 backdrop-blur-xl border border-line shadow-lift flex"
               initial={{ x: "-110%" }}
               animate={{ x: 0 }}
               exit={{ x: "-110%" }}
@@ -84,6 +103,10 @@ export default function AppShell({ nav, portalName }) {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {paletteOpen && <CommandPalette nav={nav} onClose={() => setPaletteOpen(false)} />}
+      </AnimatePresence>
+
       <div className="lg:pl-[288px] min-w-0">
         {/* Top bar */}
         <header className="sticky top-0 z-20 px-4 sm:px-6 lg:px-8 pt-3 lg:pt-4 pb-2 bg-linear-to-b from-canvas via-canvas/90 to-transparent">
@@ -95,24 +118,48 @@ export default function AppShell({ nav, portalName }) {
             >
               <Menu size={21} />
             </button>
-            <Logo className="lg:hidden scale-90 origin-left" />
-            <div className="hidden sm:flex items-center gap-2 text-[13px] font-medium text-ink-soft lg:ml-1">
+            <Logo className="lg:hidden scale-90 origin-left max-[400px]:hidden" />
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="hidden sm:flex items-center gap-2.5 h-10 pl-3 pr-2 w-full max-w-xs rounded-xl bg-surface/70 border border-line text-[13px] text-muted hover:border-violet-200 hover:text-ink-soft transition-colors"
+            >
+              <Search size={16} className="text-violet-500" aria-hidden="true" />
+              <span className="flex-1 text-left">Search…</span>
+              <kbd className="text-[11px] font-semibold border border-line rounded-md px-1.5 py-0.5">{isMac ? "⌘" : "Ctrl"} K</kbd>
+            </button>
+            <div className="hidden xl:flex items-center gap-2 text-[13px] font-medium text-ink-soft ml-2 whitespace-nowrap">
               <CalendarDays size={16} className="text-violet-500" aria-hidden="true" />
               {today.format(new Date())}
             </div>
-            <UserChip className="ml-auto" />
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => setPaletteOpen(true)}
+                className="sm:hidden w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:bg-violet-50"
+                aria-label="Search"
+              >
+                <Search size={18} />
+              </button>
+              <ThemeToggle />
+              <UserChip className="ml-1" />
+            </div>
           </div>
         </header>
 
         <main className="px-4 sm:px-6 lg:px-8 pt-7 sm:pt-9 pb-[max(2.5rem,env(safe-area-inset-bottom))] max-w-[1400px] mx-auto">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <Outlet />
-          </motion.div>
+          {status === "error" ? (
+            <ErrorState message="We couldn't load your data." onRetry={onRetry} />
+          ) : status !== "ready" ? (
+            <PageSkeleton />
+          ) : (
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <Outlet />
+            </motion.div>
+          )}
         </main>
       </div>
     </div>
@@ -195,9 +242,9 @@ function UserChip({ className }) {
   const user = useSessionStore((s) => s.user);
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <div className="hidden sm:block text-right leading-tight">
-        <p className="text-[13px] font-semibold text-ink">{fullName(user)}</p>
-        <p className="text-[11px] text-muted">{user?.email}</p>
+      <div className="hidden md:block text-right leading-tight max-w-44">
+        <p className="text-[13px] font-semibold text-ink truncate">{fullName(user)}</p>
+        <p className="text-[11px] text-muted truncate">{user?.email}</p>
       </div>
       <Avatar person={user} size="sm" />
     </div>

@@ -103,7 +103,7 @@ export default function Courses() {
                     <div className="flex -space-x-2 mt-4 min-h-9">
                       {enrolled.slice(0, 6).map((s) => <Avatar key={s._id} person={s} size="sm" className="rounded-full" />)}
                       {enrolled.length > 6 && (
-                        <span className="w-9 h-9 rounded-full bg-violet-50 ring-2 ring-white text-[12px] font-bold text-violet-600 flex items-center justify-center">+{enrolled.length - 6}</span>
+                        <span className="w-9 h-9 rounded-full bg-violet-50 ring-2 ring-surface text-[12px] font-bold text-violet-600 flex items-center justify-center">+{enrolled.length - 6}</span>
                       )}
                       {enrolled.length === 0 && <span className="text-[13px] text-muted self-center">No students yet</span>}
                     </div>
@@ -218,7 +218,7 @@ function RosterEditor({ course, enrolled, onDone }) {
                   <li key={s._id}>
                     <label className={cn(
                       "flex items-center gap-3 p-3 rounded-2xl border-2 cursor-pointer transition-all duration-200",
-                      on ? "border-violet-400 bg-violet-50/70" : "border-line hover:border-violet-200 bg-white"
+                      on ? "border-violet-400 bg-violet-50/70" : "border-line hover:border-violet-200 bg-surface"
                     )}>
                       <input type="checkbox" className="sr-only peer" checked={on} onChange={() => toggle(s._id)} />
                       <span className={cn(

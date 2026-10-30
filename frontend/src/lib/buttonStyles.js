@@ -4,7 +4,7 @@ const VARIANTS = {
   primary:
     "bg-brand-gradient text-white border-transparent shadow-glow hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0",
   secondary:
-    "bg-white text-ink-soft border-line shadow-soft hover:border-violet-200 hover:text-violet-700 hover:-translate-y-0.5 active:translate-y-0",
+    "bg-surface text-ink-soft border-line shadow-soft hover:border-violet-200 hover:text-violet-700 hover:-translate-y-0.5 active:translate-y-0",
   danger: "bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100 hover:border-rose-200",
   dangerSolid: "bg-linear-to-r from-rose-500 to-pink-500 text-white border-transparent shadow-[0_10px_24px_-8px_rgb(244_63_94/0.6)] hover:brightness-110",
   ghost: "bg-transparent text-ink-soft border-transparent hover:bg-violet-50 hover:text-violet-700",

@@ -201,7 +201,7 @@ export default function Dashboard() {
                   const tone = toneFor(idOf(a.course));
                   return (
                     <li key={a._id} className="relative flex gap-4 py-2.5">
-                      <span className={cn("relative z-10 mt-1 w-3 h-3 rounded-full ring-4 ring-white bg-linear-to-br flex-shrink-0", tone.gradient)} />
+                      <span className={cn("relative z-10 mt-1 w-3 h-3 rounded-full ring-4 ring-surface bg-linear-to-br flex-shrink-0", tone.gradient)} />
                       <div className="min-w-0 flex-1">
                         <p className="text-[14px] font-semibold text-ink truncate">{a.title}</p>
                         <p className={cn("text-[12px] font-semibold", tone.text)}>{courseName.get(idOf(a.course)) ?? "Course"}</p>

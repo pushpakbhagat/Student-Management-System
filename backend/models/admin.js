@@ -41,8 +41,9 @@ const adminSchema = new mongoose.Schema({
     imgURL: {
         type: String,
         trim: true,
-        maxlength: 2048,
-        match: [/^(https?:\/\/\S+)?$/, "Photo URL must start with http:// or https://"],
+        // a web address, or a small uploaded photo stored inline (the browser resizes it first)
+        maxlength: 300000,
+        match: [/^(https?:\/\/\S+|data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+)?$/, "Photo must be a web address or an uploaded image"],
     },
 }, {
     timestamps: true,

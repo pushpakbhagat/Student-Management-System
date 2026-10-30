@@ -22,6 +22,8 @@ const usePortalStore = create((set) => ({
     }
   },
 
+  updateProfile: (changes) => set((state) => ({ profile: { ...state.profile, ...changes } })),
+
   reset: () => set(initialState),
 }));
 

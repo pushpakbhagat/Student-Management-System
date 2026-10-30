@@ -4,7 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { cn } from "../../lib/cn";
 
 const CONTROL =
-  "w-full bg-white border border-line text-ink text-[15px] sm:text-[14px] placeholder:text-muted/70 " +
+  "w-full bg-surface border border-line text-ink text-[15px] sm:text-[14px] placeholder:text-muted/70 " +
   "rounded-2xl px-4 py-3 outline-none shadow-[inset_0_1px_2px_rgb(29_22_56/0.04)] transition-all duration-200 " +
   "hover:border-violet-200 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 " +
   "aria-[invalid=true]:border-rose-300 aria-[invalid=true]:ring-4 aria-[invalid=true]:ring-rose-500/10 disabled:opacity-60";

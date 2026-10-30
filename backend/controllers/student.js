@@ -1,7 +1,7 @@
 
 const Student = require("../models/student");
 const Course = require("../models/Courses")
-const { hashPassword, normalizeEmail, CASE_INSENSITIVE } = require("../services/auth")
+const { hashPassword, normalizeEmail, isDemoAccount, CASE_INSENSITIVE } = require("../services/auth")
 const { HttpError, assertValidId, pick, requireFields } = require("../utils/http")
 
 // The only fields a client may set on a student. Courses, marks and attendance
@@ -28,6 +28,9 @@ async function updateStudent(req, res) {
     if (updates.email !== undefined) {
         updates.email = normalizeEmail(updates.email)
     }
+    if (isDemoAccount({ email: req.params.email }) && (updates.email !== undefined || updates.password !== undefined)) {
+        throw new HttpError(403, "The demo student's email and password can't be changed")
+    }
     if (updates.password !== undefined) {
         updates.password = await hashPassword(updates.password)
         updates.passwordChangedAt = new Date()   // logs the student out everywhere
@@ -48,6 +51,11 @@ async function updateStudent(req, res) {
 async function removeStudent(req, res) {
     const { id } = req.params
     assertValidId(id, "student id")
+
+    const existing = await Student.findById(id, "email")
+    if (isDemoAccount(existing)) {
+        throw new HttpError(403, "The demo student can't be deleted")
+    }
 
     const student = await Student.findByIdAndDelete(id);
     if (!student) {

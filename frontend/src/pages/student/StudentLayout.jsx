@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { CalendarCheck, ClipboardList, LayoutDashboard, Settings } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
-import { ErrorState, FullPageLoader } from "../../components/ui/Feedback";
 import usePortalStore from "../../store/usePortalStore";
 import { TONES } from "../../lib/palette";
 
@@ -20,14 +19,5 @@ export default function StudentLayout() {
     if (status === "idle") load().catch(() => {});
   }, [status, load]);
 
-  if (status === "idle" || status === "loading") return <FullPageLoader />;
-  if (status === "error") {
-    return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <ErrorState message="We couldn't load your data." onRetry={() => load().catch(() => {})} />
-      </div>
-    );
-  }
-
-  return <AppShell nav={NAV} portalName="Student portal" />;
+  return <AppShell nav={NAV} portalName="Student portal" status={status} onRetry={() => load().catch(() => {})} />;
 }

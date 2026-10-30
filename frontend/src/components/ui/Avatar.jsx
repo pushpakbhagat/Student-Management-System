@@ -20,7 +20,7 @@ export default function Avatar({ person, size = "md", className }) {
     <div
       className={cn(
         "rounded-2xl flex-shrink-0 overflow-hidden flex items-center justify-center font-bold text-white",
-        "bg-linear-to-br shadow-soft ring-2 ring-white",
+        "bg-linear-to-br shadow-soft ring-2 ring-surface",
         tone.gradient,
         SIZES[size],
         className

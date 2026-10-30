@@ -16,17 +16,31 @@ const ROLES = [
 
 export default function Login() {
   const login = useSessionStore((s) => s.login);
+  const demoLogin = useSessionStore((s) => s.demoLogin);
   const [form, setForm] = useState({ email: "", password: "", role: "student" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [signupOpen, setSignupOpen] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(null);
+  const [setup, setSetup] = useState({ adminSignupOpen: false, demo: false });
 
-  // The "create admin" link only makes sense before the first admin exists
+  // The "create admin" link only makes sense before the first admin exists;
+  // demo buttons only when the server runs in demo mode
   useEffect(() => {
     api.get("/setup-status")
-      .then(({ data }) => setSignupOpen(data.adminSignupOpen))
-      .catch(() => setSignupOpen(false));
+      .then(({ data }) => setSetup(data))
+      .catch(() => {});
   }, []);
+
+  const tryDemo = async (role) => {
+    setError("");
+    setDemoLoading(role);
+    try {
+      await demoLogin(role);
+    } catch (err) {
+      setError(getErrorMessage(err, "The demo isn't available right now."));
+      setDemoLoading(null);
+    }
+  };
 
   const update = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -50,6 +64,23 @@ export default function Login() {
       </h2>
       <p className="text-[15px] text-muted mt-2 mb-8">Sign in to your account to continue.</p>
 
+      {setup.demo && (
+        <div className="mb-7">
+          <div className="grid grid-cols-2 gap-2">
+            {ROLES.map(({ value, label, icon: Icon }) => (
+              <Button key={value} variant="secondary" onClick={() => tryDemo(value)} loading={demoLoading === value}
+                disabled={Boolean(demoLoading)} className="h-12">
+                {demoLoading !== value && <Icon size={17} className="text-violet-500" aria-hidden="true" />}
+                Try as {label.toLowerCase()}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mt-6 text-[12px] font-semibold uppercase tracking-widest text-muted">
+            <span className="h-px flex-1 bg-line" /> or sign in <span className="h-px flex-1 bg-line" />
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
         <fieldset>
           <legend className="text-[13px] font-semibold text-ink-soft mb-2">I am a</legend>
@@ -67,7 +98,7 @@ export default function Login() {
                 {form.role === value && (
                   <motion.span
                     layoutId="role-pill"
-                    className="absolute inset-0 rounded-xl bg-white shadow-soft"
+                    className="absolute inset-0 rounded-xl bg-surface shadow-soft"
                     transition={{ type: "spring", stiffness: 450, damping: 35 }}
                   />
                 )}
@@ -108,7 +139,7 @@ export default function Login() {
         </Button>
       </form>
 
-      {signupOpen && (
+      {setup.adminSignupOpen && (
         <p className="text-center text-[14px] text-muted mt-7">
           Setting up for the first time?{" "}
           <Link to="/register" className="font-semibold text-violet-600 hover:text-fuchsia-600 transition-colors">

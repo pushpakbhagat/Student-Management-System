@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { toast } from "sonner";
 import { ArrowLeft, BookOpen, Check, UserRound, UserX } from "lucide-react";
 import api, { getErrorMessage } from "../../../api";
-import Avatar from "../../../components/ui/Avatar";
+import PhotoPicker from "../../../components/PhotoPicker";
 import Button from "../../../components/ui/Button";
 import { Card, CardHeader, EmptyState, PageHeader } from "../../../components/ui/Card";
 import { Field, FormError, Input, Select } from "../../../components/ui/Form";
@@ -24,7 +24,7 @@ function validate(form, isEdit) {
   if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
   if (!isEdit && !form.password) errors.password = "Required";
   if (form.password && form.password.length < 8) errors.password = "At least 8 characters";
-  if (form.imgURL && !/^https?:\/\/\S+$/.test(form.imgURL.trim())) errors.imgURL = "Must start with http:// or https://";
+  if (form.imgURL && !/^(https?:\/\/\S+|data:image\/)/.test(form.imgURL.trim())) errors.imgURL = "Must be an uploaded photo or a link starting with http(s)://";
   return errors;
 }
 
@@ -142,15 +142,12 @@ export default function StudentFormPage() {
 
       <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <Card className="lg:col-span-2 overflow-hidden">
-          {/* live preview strip */}
-          <div className="relative bg-linear-to-r from-violet-100 via-fuchsia-50 to-orange-50 px-5 sm:px-7 py-6 flex items-center gap-4">
-            <motion.div key={`${form.firstName[0]}${form.lastName[0]}${form.imgURL}`} initial={{ scale: 0.8, rotate: -6 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 15 }}>
-              <Avatar person={form} size="xl" />
-            </motion.div>
-            <div className="min-w-0">
-              <p className="font-display text-[22px] font-bold text-ink truncate">{fullName(form) || "New student"}</p>
-              <p className="text-[14px] text-muted truncate">{form.email || "No email yet"}</p>
-            </div>
+          {/* live preview strip with photo upload */}
+          <div className="relative bg-linear-to-r from-violet-100 via-fuchsia-50 to-orange-50 px-5 sm:px-7 py-6">
+            <p className="font-display text-[22px] font-bold text-ink truncate">{fullName(form) || "New student"}</p>
+            <p className="text-[14px] text-muted truncate mb-4">{form.email || "No email yet"}</p>
+            <PhotoPicker person={form} value={form.imgURL} onChange={(imgURL) => setForm((f) => ({ ...f, imgURL }))} />
+            {errors.imgURL && <p className="text-[12px] font-medium text-rose-600 mt-2">{errors.imgURL}</p>}
           </div>
 
           <div className="p-5 sm:p-7 grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -178,9 +175,6 @@ export default function StudentFormPage() {
             >
               {(p) => <Input {...p} type="password" name="password" value={form.password} onChange={update} autoComplete="new-password" />}
             </Field>
-            <Field label="Photo URL (optional)" error={errors.imgURL}>
-              {(p) => <Input {...p} type="url" name="imgURL" value={form.imgURL} onChange={update} placeholder="https://…" />}
-            </Field>
           </div>
         </Card>
 
@@ -207,7 +201,7 @@ export default function StudentFormPage() {
                         "inline-flex items-center gap-2 h-10 px-4 rounded-2xl text-[14px] font-semibold transition-all duration-200",
                         on
                           ? cn("bg-linear-to-r text-white shadow-soft", tone.gradient)
-                          : "bg-white text-ink-soft border border-line hover:border-violet-200"
+                          : "bg-surface text-ink-soft border border-line hover:border-violet-200"
                       )}
                     >
                       {on ? <Check size={15} strokeWidth={3} aria-hidden="true" /> : <span className={cn("w-2.5 h-2.5 rounded-full bg-linear-to-br", tone.gradient)} />}

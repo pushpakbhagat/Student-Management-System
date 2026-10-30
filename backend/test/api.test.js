@@ -2,6 +2,9 @@
 // Run with: npm test   (the first run downloads a MongoDB binary, later runs are fast)
 process.env.NODE_ENV = "test"
 process.env.JWT_SECRET = "test-secret-that-is-long-enough-for-the-checks"
+process.env.DEMO_MODE = "true"
+process.env.DEMO_ADMIN_EMAIL = "ada@test.com"
+process.env.DEMO_STUDENT_EMAIL = "demo@test.com"
 
 const { test, before, after } = require("node:test")
 const assert = require("node:assert/strict")
@@ -235,6 +238,31 @@ test("changing a password logs out other sessions but keeps this one", async () 
 
     const relogin = await request(app).post("/logininfo").send({ email: student.email, password: "newpass123", role: "student" })
     assert.equal(relogin.status, 200)
+})
+
+test("demo mode: one-click login, and the demo accounts are protected", async () => {
+    assert.equal((await request(app).get("/setup-status")).body.demo, true)
+
+    const demoAdmin = request.agent(app)
+    assert.equal((await demoAdmin.post("/demo-login").send({ role: "admin" })).status, 200)
+    assert.equal((await demoAdmin.patch("/me/password").send({ currentPassword: admin.password, newPassword: "hijacked123" })).status, 403)
+
+    assert.equal((await request(app).post("/demo-login").send({ role: "student" })).status, 404)
+    const created = await adminAgent.post("/students").send({ ...student, email: "demo@test.com" })
+    assert.equal((await request(app).post("/demo-login").send({ role: "student" })).status, 200)
+    assert.equal((await adminAgent.delete(`/students/${created.body._id}`)).status, 403)
+    assert.equal((await adminAgent.patch("/students/demo@test.com").send({ password: "hijacked123" })).status, 403)
+    assert.equal((await adminAgent.patch("/students/demo@test.com").send({ lastName: "Renamed" })).status, 200)
+})
+
+test("profile photos: uploaded images and web addresses are accepted, scripts are not", async () => {
+    const tinyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    const ok = await adminAgent.patch("/me/photo").send({ imgURL: tinyPng })
+    assert.equal(ok.status, 200)
+    assert.equal(ok.body.user.imgURL, tinyPng)
+    assert.equal((await adminAgent.patch("/me/photo").send({ imgURL: "https://example.com/me.jpg" })).status, 200)
+    assert.equal((await adminAgent.patch("/me/photo").send({ imgURL: "javascript:alert(1)" })).status, 400)
+    assert.equal((await adminAgent.patch("/me/photo").send({ imgURL: "" })).status, 200)
 })
 
 test("logout clears the cookie and unknown routes return 404 JSON", async () => {

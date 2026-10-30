@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { BookOpen, CalendarCheck, ClipboardList, Info, LayoutDashboard, Settings, Users } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
-import { ErrorState, FullPageLoader } from "../../components/ui/Feedback";
 import useAdminStore from "../../store/useAdminStore";
 import { TONES } from "../../lib/palette";
 
@@ -19,19 +18,10 @@ export default function AdminLayout() {
   const status = useAdminStore((s) => s.status);
   const load = useAdminStore((s) => s.load);
 
-  // After a page refresh the store is empty, so fetch everything once
+  // After a page refresh the store is empty, so fetch everything once (the shell shows a skeleton meanwhile)
   useEffect(() => {
     if (status === "idle") load().catch(() => {});
   }, [status, load]);
 
-  if (status === "idle" || status === "loading") return <FullPageLoader />;
-  if (status === "error") {
-    return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <ErrorState message="We couldn't load your data." onRetry={() => load().catch(() => {})} />
-      </div>
-    );
-  }
-
-  return <AppShell nav={NAV} portalName="Admin" />;
+  return <AppShell nav={NAV} portalName="Admin" status={status} onRetry={() => load().catch(() => {})} />;
 }
