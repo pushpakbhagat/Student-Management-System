@@ -22,6 +22,7 @@
     "dev": "nodemon index.js",
     "seed": "node seed.js",
     "db:local": "node scripts/local-db.js",
+    "admin": "node scripts/admin.js",
     "test": "node --test"
   },
   "nodemonConfig": {

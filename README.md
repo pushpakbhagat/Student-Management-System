@@ -120,6 +120,9 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 |---------|--------------|
 | `npm run dev` | backend (auto-restart) + frontend together |
 | `npm run dev:local` | same, plus a local MongoDB (data saved in `backend/.local-db`) |
+| `npm run admin --prefix backend -- list` | list admin accounts in the database from `MONGO_URI` |
+| `npm run admin --prefix backend -- create` | create an admin (safe on a live database, deletes nothing) |
+| `npm run admin --prefix backend -- reset-password` | set a new password for an admin who forgot theirs |
 | `npm test` | runs the backend API tests against a throwaway in-memory MongoDB |
 | `npm run build` | production build of the frontend |
 | `npm run seed -- --yes` | resets the database with demo data |
