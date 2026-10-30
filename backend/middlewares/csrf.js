@@ -11,7 +11,9 @@ function rejectCrossSiteRequests(req, res, next) {
     if (SAFE_METHODS.has(req.method)) return next()
 
     const origin = req.get("origin")
-    if (origin && !env.clientUrls.includes(origin)) {
+    // the API's own pages (the /docs explorer) count as trusted too
+    const ownOrigin = `${req.protocol}://${req.get("host")}`
+    if (origin && origin !== ownOrigin && !env.clientUrls.includes(origin)) {
         return res.status(403).json({ msg: "Request blocked: it did not come from the StudentHub app" })
     }
     next()

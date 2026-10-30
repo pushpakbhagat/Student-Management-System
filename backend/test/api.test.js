@@ -478,6 +478,59 @@ test("timetable: weekly slots are validated and students can read them", async (
     assert.equal(mine.schedule[0].room, "B-12")
 })
 
+test("students list: server-side pages, search and course filter", async () => {
+    const names = ["One", "Two", "Three", "Four", "Five"]
+    for (const n of names) {
+        const res = await adminAgent.post("/students").send({ ...student, firstName: "Pagey", lastName: n, email: `pagey.${n.toLowerCase()}@test.com` })
+        assert.equal(res.status, 201)
+    }
+    const course = (await adminAgent.post("/courses").send({ courseName: "Paging 101" })).body.course
+    const all = (await adminAgent.get("/students")).body
+    assert.ok(Array.isArray(all))     // no query: the plain list the app loads at startup
+    const ids = all.filter(s => ["pagey.one@test.com", "pagey.two@test.com"].includes(s.email)).map(s => s._id)
+    await adminAgent.patch("/enrollmultiplestudents").send({ CourseId: course._id, StudentsIds: ids })
+
+    const first = (await adminAgent.get("/students?page=1&limit=2")).body
+    assert.equal(first.students.length, 2)
+    assert.equal(first.total, all.length)
+    assert.equal(first.pages, Math.ceil(all.length / 2))
+    assert.equal((await adminAgent.get("/students?page=999&limit=2")).body.page, first.pages)
+
+    assert.equal((await adminAgent.get("/students?q=pagey")).body.total, 5)
+    assert.deepEqual((await adminAgent.get("/students?q=PAGEY%20thr")).body.students.map(s => s.lastName), ["Three"])
+    assert.equal((await adminAgent.get("/students?q=(.*")).status, 200)
+    assert.equal((await adminAgent.get(`/students?course=${course._id}`)).body.total, 2)
+    assert.equal((await adminAgent.get("/students?course=nope")).status, 400)
+
+    const teacher = request.agent(app)
+    await teacher.post("/logininfo").send({ email: "tina@test.com", password: "teacher123", role: "teacher" })
+    assert.equal((await teacher.get(`/students?course=${course._id}`)).status, 403)
+    assert.equal((await teacher.get("/students?q=pagey")).body.total, 0)
+})
+
+test("API docs: every route is documented and the docs page loads", async () => {
+    const spec = (await request(app).get("/docs/openapi.json")).body
+    assert.match(spec.openapi, /^3\./)
+
+    // "PATCH /students/:" style keys, so differently named path parameters still match
+    const key = (method, path) => `${method.toUpperCase()} ${path.replace(/\{[^}]+\}|:[^/]+/g, ":")}`
+    const documented = new Set(Object.entries(spec.paths).flatMap(([path, ops]) => Object.keys(ops).map(m => key(m, path))))
+    const routes = []
+    const walk = (stack) => {
+        for (const layer of stack) {
+            if (layer.route) Object.keys(layer.route.methods).forEach(m => routes.push(key(m, layer.route.path)))
+            else if (layer.handle?.stack) walk(layer.handle.stack)
+        }
+    }
+    walk(app.router.stack)
+    assert.ok(routes.length > 40)
+    assert.deepEqual(routes.filter(r => !documented.has(r) && r !== "GET /" && !r.includes("/docs")), [])
+
+    const page = await request(app).get("/docs/")
+    assert.equal(page.status, 200)
+    assert.match(page.text, /swagger-ui/)
+})
+
 test("logout clears the cookie and unknown routes return 404 JSON", async () => {
     const res = await studentAgent.post("/logout")
     assert.equal(res.status, 200)

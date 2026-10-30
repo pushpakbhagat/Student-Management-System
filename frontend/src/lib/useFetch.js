@@ -3,7 +3,8 @@ import api from "../api";
 
 // GET `url` and keep the result. Changing `url` (e.g. picking another course) refetches.
 // `setData` lets a page update the cached result after saving, without refetching.
-export function useFetch(url) {
+// `keepPrevious` keeps showing the last result while the next one loads (e.g. paging through a list).
+export function useFetch(url, { keepPrevious = false } = {}) {
   const [version, setVersion] = useState(0);
   const [state, setState] = useState({ key: null, data: null, error: null });
   const key = url ? `${url}#${version}` : null;
@@ -26,5 +27,6 @@ export function useFetch(url) {
   );
 
   const loading = Boolean(url) && state.key !== key;
-  return { data: loading ? null : state.data, error: loading ? null : state.error, loading, reload, setData };
+  const data = loading && !keepPrevious ? null : state.data;
+  return { data, error: loading ? null : state.error, loading, reload, setData };
 }

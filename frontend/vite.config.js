@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -20,7 +21,8 @@ export default defineConfig({
     // /api/students -> http://localhost:8004/students (same origin, so the login cookie just works)
     proxy: {
       '/api': {
-        target: 'http://localhost:8004',
+        // API_PROXY_TARGET lets the browser tests point the app at their own API
+        target: process.env.API_PROXY_TARGET || 'http://localhost:8004',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

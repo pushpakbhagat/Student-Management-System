@@ -3,6 +3,8 @@ const cors = require("cors")
 const helmet = require("helmet")
 const rateLimit = require("express-rate-limit")
 const cookieParser = require("cookie-parser")
+const swaggerUi = require("swagger-ui-express")
+const openapi = require("./docs/openapi")
 const env = require("./config/env")
 const { requestLogger } = require("./middlewares/log")
 const { rejectCrossSiteRequests } = require("./middlewares/csrf")
@@ -47,6 +49,14 @@ app.use(cookieParser())
 // ROUTES -------------------------------------------------
 app.get("/", (req, res) => res.send("the server is running"))
 app.get("/health", (req, res) => res.json({ status: "ok" }))
+
+// API docs: the spec as JSON, and Swagger UI to read it and try requests
+app.get("/docs/openapi.json", (req, res) => res.json(openapi))
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi, {
+    customSiteTitle: "StudentHub API",
+    // validatorUrl: null stops Swagger UI from sending the spec to validator.swagger.io
+    swaggerOptions: { withCredentials: true, persistAuthorization: true, validatorUrl: null },
+}))
 
 app.use(authRouter)
 app.use(studentRouter)

@@ -1,0 +1,42 @@
+# Runs the whole app with one command:  docker compose up --build
+# then open http://localhost:8080  (API docs: http://localhost:8080/api/docs/)
+#
+# Set JWT_SECRET in a .env file next to this one (see README), or the API refuses to start.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/studenthub
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (at least 32 characters) in .env}
+      CLIENT_URLS: ${APP_URL:-http://localhost:8080}
+      # the app and API share one origin through nginx, so a normal SameSite=Lax cookie works over http
+      CROSS_SITE_COOKIES: "false"
+      DEMO_MODE: ${DEMO_MODE:-false}
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo-data:

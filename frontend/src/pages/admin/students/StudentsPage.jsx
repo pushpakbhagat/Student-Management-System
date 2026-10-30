@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, FileText, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
@@ -7,8 +7,8 @@ import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import { Card, EmptyState, PageHeader } from "../../../components/ui/Card";
 import ConfirmDialog from "../../../components/ui/ConfirmDialog";
-import { Badge } from "../../../components/ui/Feedback";
-import { Input } from "../../../components/ui/Form";
+import { Badge, ErrorState, Spinner } from "../../../components/ui/Feedback";
+import { Input, Select } from "../../../components/ui/Form";
 import { Reveal, Stagger } from "../../../components/ui/Motion";
 import useAdminStore from "../../../store/useAdminStore";
 import useSessionStore from "../../../store/useSessionStore";
@@ -16,6 +16,7 @@ import { attendanceOf, attendanceTone, fullName, idOf } from "../../../lib/forma
 import { buttonClass } from "../../../lib/buttonStyles";
 import { dateStamp, downloadCsv } from "../../../lib/csv";
 import { toneFor } from "../../../lib/palette";
+import { useFetch } from "../../../lib/useFetch";
 
 const PAGE_SIZE = 10;
 
@@ -26,27 +27,50 @@ export default function StudentsPage() {
   const isAdmin = useSessionStore((s) => s.role) === "admin";
 
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState(""); // the query, once typing pauses
+  const [courseFilter, setCourseFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   const courseName = useMemo(() => new Map(courses.map((c) => [c._id, c.courseName])), [courses]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter((s) => `${fullName(s)} ${s.email}`.toLowerCase().includes(q));
-  }, [students, query]);
+  // search on the server once typing pauses
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(query.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);
-  const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  // the server does the paging and searching; the last page stays on screen while the next loads
+  const params = new URLSearchParams({ page, limit: PAGE_SIZE });
+  if (search) params.set("q", search);
+  if (courseFilter) params.set("course", courseFilter);
+  const list = useFetch(`/students?${params}`, { keepPrevious: true });
+  const visible = list.data?.students ?? [];
+  const total = list.data?.total ?? 0;
+  const pageCount = list.data?.pages ?? 1;
+  const currentPage = (list.data?.page ?? 1) - 1;
+  const filtering = Boolean(search || courseFilter);
+
+  // CSV export covers every match, not just this page, so it uses the full list already loaded
+  const matching = useMemo(() => {
+    const words = search.toLowerCase().split(/s+/).filter(Boolean);
+    return students.filter((s) => {
+      if (courseFilter && !(s.courses || []).some((e) => idOf(e.course) === courseFilter)) return false;
+      const text = `${s.firstName} ${s.lastName} ${s.email}`.toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+  }, [students, search, courseFilter]);
 
   const confirmDelete = async () => {
     setDeleting(true);
     try {
       await api.delete(`/students/${pendingDelete._id}`);
       removeStudent(pendingDelete._id);
+      list.reload();
       toast.success(`${fullName(pendingDelete)} was deleted`);
       setPendingDelete(null);
     } catch (err) {
@@ -61,7 +85,7 @@ export default function StudentsPage() {
     downloadCsv(
       `students-${dateStamp()}.csv`,
       ["First name", "Last name", "Email", "Gender", "Courses", "Classes attended", "Classes total", "Attendance %"],
-      filtered.map((s) => {
+      matching.map((s) => {
         const att = attendanceOf(s.courses);
         const names = (s.courses || []).map((e) => courseName.get(idOf(e.course))).filter(Boolean).join("; ");
         return [s.firstName, s.lastName, s.email, s.gender, names, att.attended, att.total, att.total ? att.pct : ""];
@@ -89,24 +113,37 @@ export default function StudentsPage() {
         }
       />
 
-      <div className="relative mb-5 sm:max-w-md">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-violet-400 pointer-events-none" aria-hidden="true" />
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setPage(0); }}
-          placeholder="Search by name or email"
-          aria-label="Search students"
-          className="pl-11 shadow-soft"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="relative sm:max-w-md flex-1">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-violet-400 pointer-events-none" aria-hidden="true" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or email"
+            aria-label="Search students"
+            className="pl-11 shadow-soft"
+          />
+          {list.loading && list.data && (
+            <span role="status" aria-label="Searching" className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-100 border-t-violet-500 animate-spin" />
+          )}
+        </div>
+        <Select value={courseFilter} onChange={(e) => { setCourseFilter(e.target.value); setPage(1); }} aria-label="Filter by course" className="sm:w-56 shadow-soft">
+          <option value="">All courses</option>
+          {courses.map((c) => <option key={c._id} value={c._id}>{c.courseName}</option>)}
+        </Select>
       </div>
 
       <Card className="overflow-hidden">
-        {filtered.length === 0 ? (
+        {list.error ? (
+          <ErrorState message={getErrorMessage(list.error)} onRetry={list.reload} />
+        ) : !list.data ? (
+          <Spinner className="py-16" />
+        ) : total === 0 ? (
           <EmptyState
             icon={Users}
-            title={students.length ? "No students match your search" : "No students yet"}
-            message={students.length ? "Try a different name or email." : "Add a student to get started."}
+            title={filtering ? "No students match" : "No students yet"}
+            message={filtering ? "Try a different name, email or course." : "Add a student to get started."}
           />
         ) : (
           <>
@@ -120,7 +157,7 @@ export default function StudentsPage() {
                   <th scope="col" className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <Stagger as="tbody" key={`${currentPage}-${query}`}>
+              <Stagger as="tbody" key={`${currentPage}-${search}-${courseFilter}`}>
                 {visible.map((s) => {
                   const att = attendanceOf(s.courses);
                   return (
@@ -148,7 +185,7 @@ export default function StudentsPage() {
             </table>
 
             {/* Cards on phones, tablets and laptops */}
-            <Stagger as="ul" className="xl:hidden divide-y divide-line" key={`m-${currentPage}-${query}`}>
+            <Stagger as="ul" className="xl:hidden divide-y divide-line" key={`m-${currentPage}-${search}-${courseFilter}`}>
               {visible.map((s) => {
                 const att = attendanceOf(s.courses);
                 return (
@@ -171,13 +208,13 @@ export default function StudentsPage() {
             {pageCount > 1 && (
               <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-line">
                 <p className="text-[13px] text-muted">
-                  Page <span className="font-bold text-ink">{currentPage + 1}</span> of {pageCount}
+                  Page <span className="font-bold text-ink">{currentPage + 1}</span> of {pageCount} · {total} student{total === 1 ? "" : "s"}
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 0}>
+                  <Button variant="secondary" size="sm" onClick={() => setPage(currentPage)} disabled={currentPage === 0 || list.loading}>
                     <ChevronLeft size={15} aria-hidden="true" /> Previous
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount - 1}>
+                  <Button variant="secondary" size="sm" onClick={() => setPage(currentPage + 2)} disabled={currentPage >= pageCount - 1 || list.loading}>
                     Next <ChevronRight size={15} aria-hidden="true" />
                   </Button>
                 </div>

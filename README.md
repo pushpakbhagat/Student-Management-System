@@ -29,6 +29,8 @@ A full-stack web application built using the MERN stack to manage student record
 * 📤 **CSV export** of students, attendance and grades; profile photo upload
 * 🧪 **Demo mode** – one-click "Try as admin / teacher / student" on the login page (`DEMO_MODE=true`)
 * ⚙️ **Account settings** – change your password and photo; admins can add admins and teachers
+* 📖 **API docs** – interactive OpenAPI / Swagger docs at `/docs` on the API
+* 🐳 **One-command setup** with Docker Compose, and browser tests (Playwright) running in CI
 
 ---
 
@@ -40,7 +42,9 @@ A full-stack web application built using the MERN stack to manage student record
 | Backend  | Node.js, Express 5, Mongoose |
 | Database | MongoDB |
 | Auth     | JSON Web Tokens, bcrypt |
-| Tests    | node:test, Supertest, mongodb-memory-server |
+| Tests    | node:test, Supertest, mongodb-memory-server, Playwright |
+| Docs     | OpenAPI 3 + Swagger UI |
+| Run      | Docker Compose (MongoDB, API, nginx) |
 
 ---
 
@@ -56,6 +60,7 @@ backend/
   routes/           URL → controller mapping, with auth guards
   middlewares/      auth guards, CSRF check, request logger, error handler
   services/         JWT + cookie + password helpers, grades, attendance counters, QR codes, course scoping
+  docs/openapi.js   API description shown at /docs
   seed.js           fills a database with demo data
   test/             API tests
 frontend/
@@ -65,7 +70,9 @@ frontend/
   src/lib/          formatting, timetable, file and PWA helpers
   public/sw.js      service worker (installable app, works offline)
   src/api.js        axios instance used for every API call
-.github/workflows/  CI: backend tests + audit, frontend lint + build
+e2e/                browser tests (Playwright) and the server they run against
+docker-compose.yml  MongoDB + API + web app in containers
+.github/workflows/  CI: API tests + audit, lint + build, browser tests
 ```
 
 ---
@@ -135,8 +142,43 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 | `npm run admin --prefix backend -- create` | create an admin (safe on a live database, deletes nothing) |
 | `npm run admin --prefix backend -- reset-password` | set a new password for an admin who forgot theirs |
 | `npm test` | runs the backend API tests against a throwaway in-memory MongoDB |
+| `npm run e2e` | runs the browser tests (first time: `npx playwright install chromium`) |
 | `npm run build` | production build of the frontend |
 | `npm run seed -- --yes` | resets the database with demo data |
+
+### Run everything with Docker
+
+Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free for personal use). Create a `.env` file in the project root:
+
+```
+JWT_SECRET=<long random string, at least 32 characters>
+DEMO_MODE=true
+```
+
+Then:
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8080. The API docs are at http://localhost:8080/api/docs/. To fill the database with demo data:
+
+```bash
+docker compose exec -e NODE_ENV=development backend node seed.js --yes
+```
+
+Data is kept in a Docker volume between restarts (`docker compose down -v` deletes it).
+
+### Tests
+
+* `npm test` – API tests (Supertest) against an in-memory MongoDB: auth, roles, CSRF, attendance counters, grades, hand-ins, QR check-in, paging, and a check that every route is in the API docs.
+* `npm run e2e` – Playwright drives a real browser through the app: signing in, handing in an assignment (also on a phone-sized screen), taking attendance, searching students, and a teacher and a student doing a QR check-in together. It starts its own seeded in-memory database, so it never touches your data.
+
+---
+
+## 📖 API Docs
+
+Every API serves interactive docs at `/docs` (e.g. http://localhost:8004/docs/ in development), generated from `backend/docs/openapi.js`. Sign in with `POST /logininfo` or `POST /demo-login` there and the other requests use that session. A test fails if a route is added without being documented.
 
 ---
 
@@ -169,7 +211,8 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 | GET | `/setup-status` | anyone – tells the UI whether first-admin sign-up is open |
 | POST | `/admins` | anyone while no admin exists, then admins only (can create teachers) |
 | GET | `/staff` | admin |
-| GET | `/students` | staff (teachers see their courses' students) |
+| GET | `/students` | staff (teachers see their courses' students); add `page`, `limit`, `q` (search) or `course` to get one page |
+| GET | `/docs`, `/docs/openapi.json` | anyone – API docs |
 | POST | `/students` | admin |
 | PATCH | `/students/:email` | admin |
 | DELETE | `/students/:id` | admin |

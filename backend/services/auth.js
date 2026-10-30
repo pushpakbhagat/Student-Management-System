@@ -76,13 +76,13 @@ async function findAccountForToken(token) {
     return { account, role: payload.role }
 }
 
-// In production the frontend (Netlify) and the API live on different sites,
-// so the browser only sends the cookie if it is SameSite=None + Secure.
+// When the frontend (Netlify) and the API live on different sites, the browser only
+// sends the cookie if it is SameSite=None + Secure (see CROSS_SITE_COOKIES in config/env.js).
 function cookieOptions() {
     return {
         httpOnly: true,
-        secure: env.isProduction,
-        sameSite: env.isProduction ? "none" : "lax",
+        secure: env.crossSiteCookies,
+        sameSite: env.crossSiteCookies ? "none" : "lax",
         path: "/",
     }
 }

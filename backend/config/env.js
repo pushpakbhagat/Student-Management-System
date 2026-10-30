@@ -15,6 +15,9 @@ const env = {
         .split(",")
         .map(url => url.trim())
         .filter(Boolean),
+    // The hosted setup (Netlify app + Render API) is cross-site, so the login cookie must be
+    // SameSite=None + Secure. Behind one origin (Docker Compose: nginx forwards /api) it doesn't need to be.
+    crossSiteCookies: process.env.CROSS_SITE_COOKIES ? process.env.CROSS_SITE_COOKIES === "true" : nodeEnv === "production",
     // DEMO_MODE=true shows one-click "try as admin / student" buttons on the login page
     demoMode: process.env.DEMO_MODE === "true",
     demoAccounts: {

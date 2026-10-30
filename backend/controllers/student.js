@@ -78,11 +78,39 @@ async function removeStudent(req, res) {
 }
 
 // ALL STUDENTS -------------------------------------------------------------------
-// Teachers get only the students in their courses
+// Teachers get only the students in their courses.
+// GET /students                         -> everyone the caller may see (an array)
+// GET /students?page=&limit=&q=&course= -> one page: { students, total, page, pages, limit }
+// `q` matches names and email; with several words ("rahul sha") each word has to match.
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
 async function handleGetAllStudents(req, res) {
     const scope = await courseScope(req.user)
-    const students = await Student.find(scope ? { "courses.course": scope } : {}).sort({ createdAt: -1 });
-    return res.status(200).json(students);
+    const filter = scope ? { "courses.course": scope } : {}
+    const { page, limit, q, course } = req.query
+    if ([page, limit, q, course].every(v => v === undefined)) {
+        return res.status(200).json(await Student.find(filter).sort({ createdAt: -1 }))
+    }
+
+    if (course) {
+        assertValidId(course, "course id")
+        if (scope && !scope.$in.some(id => String(id) === course)) throw new HttpError(403, "You don't teach this course")
+        filter["courses.course"] = course
+    }
+    const words = typeof q === "string" ? q.trim().split(/\s+/).filter(Boolean).slice(0, 5) : []
+    if (words.length) {
+        filter.$and = words.map(word => {
+            const pattern = new RegExp(escapeRegex(word.slice(0, 50)), "i")
+            return { $or: [{ firstName: pattern }, { lastName: pattern }, { email: pattern }] }
+        })
+    }
+
+    const size = Math.min(100, Math.max(1, parseInt(limit, 10) || 20))
+    const total = await Student.countDocuments(filter)
+    const pages = Math.max(1, Math.ceil(total / size))
+    const current = Math.min(pages, Math.max(1, parseInt(page, 10) || 1))
+    const students = await Student.find(filter).sort({ createdAt: -1, _id: -1 }).skip((current - 1) * size).limit(size)
+    return res.status(200).json({ students, total, page: current, pages, limit: size })
 }
 
 // Admins can look up anyone, teachers their own students, students themselves

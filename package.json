@@ -8,9 +8,11 @@
     "dev:local": "concurrently -n db,api,web -c green,blue,magenta \"npm run db:local --prefix backend\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "test": "npm test --prefix backend",
     "build": "npm run build --prefix frontend",
-    "seed": "npm run seed --prefix backend --"
+    "seed": "npm run seed --prefix backend --",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "concurrently": "^10.0.6"
   }
 }
