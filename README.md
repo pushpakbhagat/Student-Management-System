@@ -1,6 +1,6 @@
 # 🎓 Student Management System (Student Hub)
 
-A full-stack web application built using the MERN stack to manage student records, courses, attendance, marks and assignments, with role-based access for admins and students.
+A full-stack web application built using the MERN stack to manage student records, courses, attendance, grades, assignments and announcements, with role-based access for admins and students.
 
 ---
 
@@ -14,11 +14,16 @@ A full-stack web application built using the MERN stack to manage student record
 
 * 👨‍🎓 **Students** – searchable directory, add/edit with course enrollment, delete with confirmation
 * 📚 **Courses** – create/delete courses and manage each course's roster
-* ✅ **Attendance & marks** – mark a whole class at once, record marks per course
+* ✅ **Attendance by date** – record each class day (present / late / absent / excused), edit or delete past days; students see their day-by-day history
+* 🎓 **Gradebook** – weighted quizzes, assignments and exams per course; grades (%, letter, GPA) update live as you type
+* 📣 **Announcements** – for everyone or one course, with pinning; shown on students' dashboards
 * 📝 **Assignments** – per-course assignments with due dates and a due-date calendar
-* 📊 **Dashboards** for admins (stats, low-attendance alerts, enrollment) and students (attendance, marks, deadlines)
+* 📊 **Dashboards** for admins (stats, low-attendance alerts, enrollment) and students (attendance, GPA, news, deadlines)
+* 🌗 **Light & dark mode**, ⌘/Ctrl + K command palette, smooth animations, skeleton loading
 * 📱 **Mobile-friendly** – responsive layouts with a slide-out menu on phones and tablets
-* ⚙️ **Account settings** – change your password; admins can add other admins
+* 📤 **CSV export** of students, attendance and grades; profile photo upload
+* 🧪 **Demo mode** – one-click "Try as admin / student" on the login page (`DEMO_MODE=true`)
+* ⚙️ **Account settings** – change your password and photo; admins can add other admins
 
 ---
 
@@ -152,6 +157,8 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 | POST | `/logout` | anyone |
 | GET | `/check-auth`, `/me` | logged in |
 | PATCH | `/me/password` | logged in (rate limited) |
+| PATCH | `/me/photo` | logged in – your own profile photo |
+| POST | `/demo-login` | anyone, only when `DEMO_MODE=true` |
 | GET | `/setup-status` | anyone – tells the UI whether first-admin sign-up is open |
 | POST | `/admins` | anyone while no admin exists, then admins only |
 | GET / POST | `/students` | admin |
@@ -160,7 +167,15 @@ This starts the API on http://localhost:8004 and the frontend on http://localhos
 | GET | `/students/email/:email` | admin, or that student |
 | GET | `/courses`, `/assignments`, `/assignments/course/:courseId` | logged in (students get only their own courses) |
 | POST / DELETE | `/courses`, `/courses/:CourseId` | admin |
-| PATCH | `/courses/attendance`, `/courses/marks` | admin |
+| GET / POST | `/courses/:CourseId/sessions` | admin – attendance by day |
+| PATCH / DELETE | `/sessions/:id` | admin |
+| GET | `/me/attendance` | student – own day-by-day history |
+| GET / POST | `/courses/:CourseId/assessments` | admin – gradebook |
+| PATCH / DELETE | `/assessments/:id` | admin |
+| PUT | `/assessments/:id/scores` | admin |
+| GET | `/me/grades` | student – own scores, grades and GPA |
+| GET | `/announcements` | logged in (students see everyone's + their courses') |
+| POST / PATCH / DELETE | `/announcements`, `/announcements/:id` | admin |
 | POST | `/enrollcourse` | admin |
 | PATCH | `/enrollmultiplecourses`, `/enrollmultiplestudents` | admin |
 | DELETE | `/courses/:CourseId/students/:StudentId` | admin |

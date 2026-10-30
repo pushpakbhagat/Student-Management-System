@@ -49,21 +49,22 @@ export function InView({ className, children, delay = 0 }) {
   );
 }
 
-// Number that counts up from 0 the first time it's on screen
+// Number that counts up from 0 the first time it's on screen (keeps decimals, e.g. a GPA of 3.25)
 export function CountUp({ value, suffix = "", duration = 1.1, className }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true });
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState("0");
+  const decimals = Math.min((String(value).split(".")[1] ?? "").length, 2);
 
   useEffect(() => {
     if (!inView) return;
     const controls = animate(0, value, {
       duration,
       ease: EASE,
-      onUpdate: (v) => setDisplay(Math.round(v)),
+      onUpdate: (v) => setDisplay(v.toFixed(decimals)),
     });
     return () => controls.stop();
-  }, [inView, value, duration]);
+  }, [inView, value, duration, decimals]);
 
   return (
     <span ref={ref} className={className}>

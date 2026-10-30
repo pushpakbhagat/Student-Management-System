@@ -17,6 +17,8 @@ const StudentFormPage = lazy(() => import("./pages/admin/students/StudentFormPag
 const Courses = lazy(() => import("./pages/admin/Courses"));
 const Attendance = lazy(() => import("./pages/admin/Attendance"));
 const AdminAssignments = lazy(() => import("./pages/admin/Assignments"));
+const Grades = lazy(() => import("./pages/admin/Grades"));
+const Announcements = lazy(() => import("./pages/admin/Announcements"));
 const About = lazy(() => import("./pages/admin/About"));
 const Account = lazy(() => import("./pages/admin/Account"));
 
@@ -25,6 +27,8 @@ const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
 const StudentAttendance = lazy(() => import("./pages/student/StudentAttendance"));
 const StudentAssignments = lazy(() => import("./pages/student/StudentAssignments"));
 const StudentSettings = lazy(() => import("./pages/student/StudentSettings"));
+const StudentGrades = lazy(() => import("./pages/student/StudentGrades"));
+const StudentAnnouncements = lazy(() => import("./pages/student/StudentAnnouncements"));
 
 export default function App() {
   const restore = useSessionStore((s) => s.restore);
@@ -51,6 +55,8 @@ export default function App() {
           <Route path="courses" element={<Courses />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="assignments" element={<AdminAssignments />} />
+          <Route path="grades" element={<Grades />} />
+          <Route path="announcements" element={<Announcements />} />
           <Route path="account" element={<Account />} />
           <Route path="about" element={<About />} />
         </Route>
@@ -60,6 +66,8 @@ export default function App() {
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="attendance" element={<StudentAttendance />} />
           <Route path="assignments" element={<StudentAssignments />} />
+          <Route path="grades" element={<StudentGrades />} />
+          <Route path="announcements" element={<StudentAnnouncements />} />
           <Route path="settings" element={<StudentSettings />} />
         </Route>
 

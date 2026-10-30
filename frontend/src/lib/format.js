@@ -80,6 +80,35 @@ export function toDateInput(value) {
   return value ? new Date(value).toISOString().slice(0, 10) : "";
 }
 
+// Today's date in the user's time zone as "YYYY-MM-DD"
+export function todayInput() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// "YYYY-MM-DD" shifted by n days
+export function shiftDay(day, n) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Attendance session dates are stored as midnight UTC, so format them in UTC too
+const dayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+export function formatDay(value) {
+  return value ? dayFormat.format(new Date(value)) : "";
+}
+
+const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+export function timeAgo(value) {
+  const seconds = Math.round((new Date(value) - new Date()) / 1000);
+  const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
+  }
+  return "just now";
+}
+
 // Enrollment / assignment course fields can be an id or a populated { _id, courseName }
 export function idOf(ref) {
   return ref && typeof ref === "object" ? ref._id : ref;

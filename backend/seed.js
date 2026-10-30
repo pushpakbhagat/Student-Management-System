@@ -6,8 +6,33 @@ const Admin = require("./models/admin");
 const Student = require("./models/student");
 const Course = require("./models/Courses");
 const Assignment = require("./models/Assignment");
+const AttendanceSession = require("./models/AttendanceSession");
+const Assessment = require("./models/Assessment");
+const Announcement = require("./models/Announcement");
+const { applyCounterChanges } = require("./services/attendance");
 
 const DEMO_ADMIN_PASSWORD = "admin123";
+
+// Small deterministic random generator, so every seed produces the same demo data
+function makeRandom(seed) {
+    let s = seed;
+    return () => {
+        s = (s * 1664525 + 1013904223) % 4294967296;
+        return s / 4294967296;
+    };
+}
+
+// The last `count` weekdays before today, as midnight-UTC dates
+function recentWeekdays(count) {
+    const days = [];
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    while (days.length < count) {
+        d.setUTCDate(d.getUTCDate() - 1);
+        if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) days.push(new Date(d));
+    }
+    return days.reverse();
+}
 const DEMO_STUDENT_PASSWORD = "student123";
 
 const seedDatabase = async () => {
@@ -23,7 +48,7 @@ const seedDatabase = async () => {
     // Seeding wipes data, so make the user confirm which database it will hit
     const dbHost = env.mongoUri.replace(/\/\/[^@]*@/, "//").split("?")[0];
     if (!process.argv.includes("--yes")) {
-        console.log(`This will DELETE all admins, students, courses and assignments in:\n  ${dbHost}\n`);
+        console.log(`This will DELETE all admins, students, courses, assignments, attendance, grades and announcements in:\n  ${dbHost}\n`);
         console.log("If that is what you want, run:  npm run seed -- --yes");
         process.exit(0);
     }
@@ -38,6 +63,9 @@ const seedDatabase = async () => {
             Student.deleteMany({}),
             Course.deleteMany({}),
             Assignment.deleteMany({}),
+            AttendanceSession.deleteMany({}),
+            Assessment.deleteMany({}),
+            Announcement.deleteMany({}),
         ]);
         console.log("Cleared existing data");
 
@@ -92,6 +120,58 @@ const seedDatabase = async () => {
             await Course.updateOne({ _id: course._id }, { $push: { assignments: assignment._id } });
         }
         console.log("✅ Assignments created");
+
+        // ── Seed two weeks of attendance ─────────────
+        // each student gets their own "reliability", so the dashboards have something to show
+        const random = makeRandom(42);
+        const reliability = new Map(createdStudents.map((s, i) => [String(s._id), [0.97, 0.9, 0.82, 0.7, 0.93][i % 5]]));
+        for (const course of courses) {
+            for (const date of recentWeekdays(10)) {
+                const records = createdStudents.map(s => {
+                    const r = random();
+                    const p = reliability.get(String(s._id));
+                    const status = r < p ? (r < p - 0.08 ? "present" : "late") : r > 0.97 ? "excused" : "absent";
+                    return { student: s._id, status };
+                });
+                await AttendanceSession.create({ course: course._id, date, records });
+                await applyCounterChanges(course._id, [], records);
+            }
+        }
+        console.log("✅ Attendance history created");
+
+        // ── Seed assessments with scores ─────────────
+        const plan = [
+            { title: "Quiz 1", kind: "quiz", maxScore: 20, weight: 15, daysAgo: 12 },
+            { title: "Assignment 1", kind: "assignment", maxScore: 50, weight: 25, daysAgo: 7 },
+            { title: "Midterm", kind: "midterm", maxScore: 100, weight: 60, daysAgo: 2 },
+        ];
+        for (const course of courses) {
+            for (const item of plan) {
+                const scores = createdStudents.map((s, i) => {
+                    const ability = [0.92, 0.84, 0.76, 0.63, 0.88][i % 5];
+                    const pct = Math.min(1, Math.max(0.35, ability + (random() - 0.5) * 0.16));
+                    return { student: s._id, score: Math.round(pct * item.maxScore) };
+                });
+                await Assessment.create({
+                    course: course._id,
+                    title: item.title,
+                    kind: item.kind,
+                    maxScore: item.maxScore,
+                    weight: item.weight,
+                    date: new Date(Date.now() - item.daysAgo * 86400000),
+                    scores,
+                });
+            }
+        }
+        console.log("✅ Grades created");
+
+        // ── Seed announcements ───────────────────────
+        const admin = await Admin.findOne({ email: "admin@studenthub.com" });
+        await Announcement.create([
+            { title: "Welcome to the new term!", body: "Check your dashboard for courses, attendance and upcoming deadlines.", author: admin._id, pinned: true },
+            { title: `${courses[1].courseName} lab moved to Thursday`, body: "This week's lab session moves to Thursday 2pm, room B-204.", course: courses[1]._id, author: admin._id },
+        ]);
+        console.log("✅ Announcements created");
 
         console.log("\n🎉 Database seeded successfully!");
         console.log("─────────────────────────────────");

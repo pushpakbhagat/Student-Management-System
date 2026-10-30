@@ -2,6 +2,9 @@
 const Course = require("../models/Courses");
 const Student = require("../models/student")
 const Assignment = require("../models/Assignment")
+const AttendanceSession = require("../models/AttendanceSession")
+const Assessment = require("../models/Assessment")
+const Announcement = require("../models/Announcement")
 const { HttpError, isValidId, assertValidId } = require("../utils/http")
 
 function newEnrollment(courseId) {
@@ -35,7 +38,7 @@ async function getAllCourses(req, res) {
     return res.status(200).json({ msg: "Courses fetched", Courses: courses })
 }
 
-// Deleting a course also un-enrolls its students and deletes its assignments
+// Deleting a course also un-enrolls its students and deletes everything that belongs to it
 async function deleteCourse(req, res) {
     const { CourseId } = req.params
     assertValidId(CourseId, "course id")
@@ -49,7 +52,12 @@ async function deleteCourse(req, res) {
         { "courses.course": CourseId },
         { $pull: { courses: { course: CourseId } } }
     )
-    await Assignment.deleteMany({ course: CourseId })
+    await Promise.all([
+        Assignment.deleteMany({ course: CourseId }),
+        AttendanceSession.deleteMany({ course: CourseId }),
+        Assessment.deleteMany({ course: CourseId }),
+        Announcement.deleteMany({ course: CourseId }),
+    ])
 
     return res.status(200).json({ msg: "Course deleted", deletedCourse, students })
 }
@@ -150,58 +158,14 @@ async function unenrollStudent(req, res) {
     if (!student) {
         throw new HttpError(404, "Student is not enrolled in this course")
     }
-    await Course.updateOne({ _id: CourseId }, { $pull: { students: student._id } })
+    await Promise.all([
+        Course.updateOne({ _id: CourseId }, { $pull: { students: student._id } }),
+        // their history in this course goes too (the UI warns about this)
+        AttendanceSession.updateMany({ course: CourseId }, { $pull: { records: { student: student._id } } }),
+        Assessment.updateMany({ course: CourseId }, { $pull: { scores: { student: student._id } } }),
+    ])
 
     return res.status(200).json({ msg: "Student removed from course", Student: student })
-}
-
-// ATTENDANCE & MARKS -------------------------------------------------------------
-async function updateAttendance(req, res) {
-    const { CourseId, StudentId, ifPresent } = req.body ?? {}
-    assertValidId(StudentId, "student id")
-    assertValidId(CourseId, "course id")
-    if (typeof ifPresent !== "boolean") {
-        throw new HttpError(400, "ifPresent must be true or false")
-    }
-
-    const updateQuery = { $inc: { "courses.$.totalClasses": 1 } }
-    if (ifPresent) {
-        updateQuery.$inc["courses.$.attendedClasses"] = 1
-    }
-
-    const student = await Student.findOneAndUpdate(
-        { _id: StudentId, "courses.course": CourseId },
-        updateQuery,
-        { returnDocument: "after" }
-    )
-    if (!student) {
-        throw new HttpError(404, "Student is not enrolled in this course")
-    }
-
-    return res.status(200).json({ msg: "Attendance updated", student })
-}
-
-async function updateMarks(req, res) {
-    const { StudentId, CourseId, Marks } = req.body ?? {}
-    assertValidId(StudentId, "student id")
-    assertValidId(CourseId, "course id")
-
-    // 0 is a valid mark, so check for "missing" explicitly instead of !Marks
-    const marks = Number(Marks)
-    if (Marks === undefined || Marks === null || Marks === "" || !Number.isFinite(marks) || marks < 0) {
-        throw new HttpError(400, "Marks must be a number of 0 or more")
-    }
-
-    const student = await Student.findOneAndUpdate(
-        { _id: StudentId, "courses.course": CourseId },
-        { $set: { "courses.$.marks": marks } },
-        { returnDocument: "after" }
-    )
-    if (!student) {
-        throw new HttpError(404, "Student is not enrolled in this course")
-    }
-
-    return res.status(200).json({ msg: "Marks updated", Student: student })
 }
 
 
@@ -213,6 +177,4 @@ module.exports = {
     enrollStudentInMultipleCourses,
     enrollMultipleStudentsInSingleCourse,
     unenrollStudent,
-    updateAttendance,
-    updateMarks,
 }

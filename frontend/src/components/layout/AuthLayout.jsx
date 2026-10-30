@@ -124,7 +124,7 @@ function Showcase() {
             className="mt-7 flex flex-wrap gap-2"
           >
             {[
-              { icon: CalendarCheck, label: "Attendance & marks" },
+              { icon: CalendarCheck, label: "Attendance & grades" },
               { icon: BookOpen, label: "Courses" },
               { icon: ClipboardList, label: "Assignments" },
             ].map(({ icon: Icon, label }) => (

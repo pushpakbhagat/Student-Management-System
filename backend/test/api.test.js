@@ -95,21 +95,61 @@ test("admin creates a course and a student, then enrolls the student", async () 
     assert.ok(all.body.every(s => s.password === undefined))
 })
 
-test("attendance and marks update, and 0 marks are allowed", async () => {
-    const present = await adminAgent.patch("/courses/attendance").send({ CourseId: courseId, StudentId: studentId, ifPresent: true })
-    assert.equal(present.status, 200)
-    assert.equal(present.body.student.courses[0].attendedClasses, 1)
-    assert.equal(present.body.student.courses[0].totalClasses, 1)
+test("dated attendance sessions keep each student's totals in sync", async () => {
+    const totals = (res) => {
+        const s = res.body.students.find(x => x._id === studentId)
+        return [s.courses[0].attendedClasses, s.courses[0].totalClasses]
+    }
+    const url = `/courses/${courseId}/sessions`
 
-    const marks = await adminAgent.patch("/courses/marks").send({ CourseId: courseId, StudentId: studentId, Marks: "0" })
-    assert.equal(marks.status, 200)
-    assert.equal(marks.body.Student.courses[0].marks, 0)
+    const created = await adminAgent.post(url).send({ date: "2030-01-10", topic: "Intro", records: [{ student: studentId, status: "present" }] })
+    assert.equal(created.status, 201)
+    assert.deepEqual(totals(created), [1, 1])
 
-    const negative = await adminAgent.patch("/courses/marks").send({ CourseId: courseId, StudentId: studentId, Marks: -5 })
-    assert.equal(negative.status, 400)
+    assert.equal((await adminAgent.post(url).send({ date: "2030-01-10", records: [{ student: studentId, status: "present" }] })).status, 409)
+    assert.equal((await adminAgent.post(url).send({ date: "not-a-date", records: [{ student: studentId, status: "present" }] })).status, 400)
+    assert.equal((await adminAgent.post(url).send({ date: "2030-01-11", records: [{ student: studentId, status: "asleep" }] })).status, 400)
+    assert.equal((await adminAgent.post(url).send({ date: "2030-01-11", records: [{ student: new mongoose.Types.ObjectId(), status: "present" }] })).status, 400)
 
-    const notEnrolled = await adminAgent.patch("/courses/attendance").send({ CourseId: new mongoose.Types.ObjectId().toString(), StudentId: studentId, ifPresent: true })
-    assert.equal(notEnrolled.status, 404)
+    const id = created.body.session._id
+    assert.deepEqual(totals(await adminAgent.patch(`/sessions/${id}`).send({ records: [{ student: studentId, status: "absent" }] })), [0, 1])
+    assert.deepEqual(totals(await adminAgent.patch(`/sessions/${id}`).send({ records: [{ student: studentId, status: "excused" }] })), [0, 0])
+    assert.deepEqual(totals(await adminAgent.patch(`/sessions/${id}`).send({ records: [{ student: studentId, status: "late" }] })), [1, 1])
+
+    const second = await adminAgent.post(url).send({ date: "2030-01-12", records: [{ student: studentId, status: "absent" }] })
+    assert.deepEqual(totals(second), [1, 2])
+    assert.deepEqual(totals(await adminAgent.delete(`/sessions/${second.body.session._id}`)), [1, 1])
+
+    const list = await adminAgent.get(url)
+    assert.equal(list.body.sessions.length, 1)
+})
+
+test("grades: weighted assessments, score limits, and 0 is a valid score", async () => {
+    const url = `/courses/${courseId}/assessments`
+    const quiz = (await adminAgent.post(url).send({ title: "Quiz 1", kind: "quiz", maxScore: 20, weight: 40 })).body.assessment
+    const final = (await adminAgent.post(url).send({ title: "Final", kind: "final", maxScore: 100, weight: 60 })).body.assessment
+    assert.ok(quiz && final)
+    assert.equal((await adminAgent.post(url).send({ title: "Bad", maxScore: 0, weight: 10 })).status, 400)
+
+    assert.equal((await adminAgent.put(`/assessments/${quiz._id}/scores`).send({ scores: [{ student: studentId, score: 25 }] })).status, 400)
+    assert.equal((await adminAgent.put(`/assessments/${quiz._id}/scores`).send({ scores: [{ student: studentId, score: 0 }] })).status, 200)
+    const saved = await adminAgent.put(`/assessments/${quiz._id}/scores`).send({ scores: [{ student: studentId, score: 15 }] })
+    assert.equal(saved.body.assessment.scores[0].score, 15)
+
+    // lowering the max below an existing score is refused
+    assert.equal((await adminAgent.patch(`/assessments/${quiz._id}`).send({ maxScore: 10 })).status, 400)
+    assert.equal((await adminAgent.get(url)).body.assessments.length, 2)
+})
+
+test("announcements: everyone or one course, pinned first", async () => {
+    const all = await adminAgent.post("/announcements").send({ title: "Welcome back!", body: "Term starts Monday" })
+    assert.equal(all.status, 201)
+    const course = await adminAgent.post("/announcements").send({ title: "Physics lab moved", course: courseId, pinned: true })
+    assert.equal(course.body.announcement.course.courseName, "Physics")
+    assert.equal((await adminAgent.post("/announcements").send({ body: "no title" })).status, 400)
+
+    const list = await adminAgent.get("/announcements")
+    assert.equal(list.body.announcements[0].title, "Physics lab moved")
 })
 
 test("student update only changes allowed fields", async () => {
@@ -125,7 +165,18 @@ test("students can log in but cannot use admin routes", async () => {
     assert.equal(login.body.student.password, undefined)
 
     assert.equal((await studentAgent.get("/students")).status, 403)
-    assert.equal((await studentAgent.patch("/courses/marks").send({ CourseId: courseId, StudentId: studentId, Marks: 100 })).status, 403)
+    assert.equal((await studentAgent.post(`/courses/${courseId}/sessions`).send({ date: "2030-02-01", records: [{ student: studentId, status: "present" }] })).status, 403)
+    assert.equal((await studentAgent.post(`/courses/${courseId}/assessments`).send({ title: "Easy A", maxScore: 1, weight: 100 })).status, 403)
+    assert.equal((await studentAgent.post("/announcements").send({ title: "Free pizza" })).status, 403)
+
+    // their own history, grades and announcements
+    const history = await studentAgent.get("/me/attendance")
+    assert.equal(history.body.history[0].status, "late")
+    const grades = await studentAgent.get("/me/grades")
+    assert.equal(grades.body.courses[0].grade.percent, 75)   // only the quiz is graded: 15/20
+    assert.equal(grades.body.courses[0].grade.letter, "C")
+    assert.equal(grades.body.gpa, 2)
+    assert.equal((await studentAgent.get("/announcements")).body.announcements.length, 2)
     assert.equal((await studentAgent.post("/admins").send({ ...admin, email: "sneaky@test.com" })).status, 403)
 
     assert.equal((await studentAgent.get(`/students/email/${student.email}`)).status, 200)

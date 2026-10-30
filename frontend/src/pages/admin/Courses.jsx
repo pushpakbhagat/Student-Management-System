@@ -134,7 +134,7 @@ export default function Courses() {
         title={`Delete ${pendingDelete?.courseName}?`}
         message={
           pendingDelete
-            ? `${enrolledIn(pendingDelete._id).length} student(s) will be un-enrolled and ${assignmentCount(pendingDelete._id)} assignment(s) deleted, along with all attendance and marks for this course.`
+            ? `${enrolledIn(pendingDelete._id).length} student(s) will be un-enrolled and ${assignmentCount(pendingDelete._id)} assignment(s) deleted, along with all attendance and grades for this course.`
             : ""
         }
         busy={deleting}
@@ -237,7 +237,7 @@ function RosterEditor({ course, enrolled, onDone }) {
           )}
           {toRemove.length > 0 && (
             <p className="text-[13px] font-medium text-amber-700 bg-amber-50 rounded-2xl px-4 py-3 mt-4">
-              Removing a student deletes their attendance and marks for this course.
+              Removing a student deletes their attendance and grades for this course.
             </p>
           )}
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">

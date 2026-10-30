@@ -104,8 +104,7 @@ async function changePassword(req, res) {
     }
 
     account.password = await hashPassword(newPassword)
-    // 1s back-dated so the fresh token issued below (whole-second iat) is still accepted
-    account.passwordChangedAt = new Date(Date.now() - 1000)
+    account.passwordChangedAt = new Date()
     await account.save()
 
     // other devices are now logged out; keep this one logged in

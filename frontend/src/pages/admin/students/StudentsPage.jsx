@@ -186,7 +186,7 @@ export default function StudentsPage() {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title={`Delete ${fullName(pendingDelete)}?`}
-        message="Their attendance and marks are deleted too. This can't be undone."
+        message="Their attendance and grades are deleted too. This can't be undone."
         busy={deleting}
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}

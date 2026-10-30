@@ -1,13 +1,15 @@
 import { useEffect } from "react";
-import { CalendarCheck, ClipboardList, LayoutDashboard, Settings } from "lucide-react";
+import { CalendarCheck, ClipboardList, GraduationCap, LayoutDashboard, Megaphone, Settings } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import usePortalStore from "../../store/usePortalStore";
 import { TONES } from "../../lib/palette";
 
 const NAV = [
   { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard, tone: TONES.violet.chip },
-  { to: "/student/attendance", label: "Attendance & Marks", icon: CalendarCheck, tone: TONES.coral.chip },
+  { to: "/student/attendance", label: "Attendance", icon: CalendarCheck, tone: TONES.coral.chip },
+  { to: "/student/grades", label: "Grades", icon: GraduationCap, tone: TONES.sky.chip },
   { to: "/student/assignments", label: "Assignments", icon: ClipboardList, tone: TONES.amber.chip },
+  { to: "/student/announcements", label: "Announcements", icon: Megaphone, tone: TONES.teal.chip },
   { to: "/student/settings", label: "Settings", icon: Settings, tone: TONES.pink.chip },
 ];
 

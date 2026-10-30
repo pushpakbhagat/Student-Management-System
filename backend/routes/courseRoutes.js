@@ -9,8 +9,6 @@ const {
     enrollStudentInMultipleCourses,
     enrollMultipleStudentsInSingleCourse,
     unenrollStudent,
-    updateAttendance,
-    updateMarks,
 } = require("../controllers/courses")
 const { requireAuth, requireAdmin } = require("../middlewares/auth")
 
@@ -20,8 +18,6 @@ const { requireAuth, requireAdmin } = require("../middlewares/auth")
 router.get('/courses', requireAuth, getAllCourses)
 router.post('/courses', requireAdmin, handleNewCourse)
 router.delete('/courses/:CourseId', requireAdmin, deleteCourse)
-router.patch('/courses/attendance', requireAdmin, updateAttendance)
-router.patch('/courses/marks', requireAdmin, updateMarks)
 router.post('/enrollcourse', requireAdmin, enrollStudentInCourse)
 router.patch('/enrollmultiplecourses', requireAdmin, enrollStudentInMultipleCourses)
 router.patch('/enrollmultiplestudents', requireAdmin, enrollMultipleStudentsInSingleCourse)

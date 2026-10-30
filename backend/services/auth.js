@@ -38,6 +38,9 @@ function generateToken(user, role) {
         id: user._id.toString(),
         email: user.email,
         role: role,
+        // millisecond issue time; the standard `iat` is whole seconds, too coarse to compare
+        // with a password change that happens right after a login
+        issuedAt: Date.now(),
     }
     return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn })
 }
@@ -60,7 +63,8 @@ async function findAccountForToken(token) {
 
     const account = await Model.findById(payload.id)
     if (!account) return null
-    if (account.passwordChangedAt && payload.iat * 1000 < account.passwordChangedAt.getTime()) return null
+    const issuedAt = payload.issuedAt ?? payload.iat * 1000
+    if (account.passwordChangedAt && issuedAt < account.passwordChangedAt.getTime()) return null
 
     return { account, role: payload.role }
 }

@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertTriangle, ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, PartyPopper, Trophy } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, Megaphone, PartyPopper, Trophy } from "lucide-react";
 import { Card, CardHeader, EmptyState, StatCard } from "../../components/ui/Card";
 import { Badge, Ring } from "../../components/ui/Feedback";
 import { InView, Reveal, Stagger } from "../../components/ui/Motion";
 import Hero from "../../components/ui/Hero";
+import AnnouncementCard from "../../components/AnnouncementCard";
 import usePortalStore from "../../store/usePortalStore";
+import { useFetch } from "../../lib/useFetch";
 import { ATTENDANCE_TARGET, attendanceOf, attendanceTone, classesNeeded, daysUntil, dueLabel, greeting, idOf, percent } from "../../lib/format";
 import { STATUS, toneFor } from "../../lib/palette";
 import { cn } from "../../lib/cn";
@@ -21,7 +23,10 @@ export default function StudentDashboard() {
   const upcoming = assignments.filter((a) => a.dueDate && daysUntil(a.dueDate) >= 0);
   const overdue = assignments.filter((a) => a.dueDate && daysUntil(a.dueDate) < 0);
   const lowCourses = enrollments.filter((e) => e.totalClasses > 0 && percent(e.attendedClasses, e.totalClasses) < ATTENDANCE_TARGET);
-  const best = [...enrollments].sort((a, b) => (b.marks || 0) - (a.marks || 0))[0];
+  const grades = useFetch("/me/grades");
+  const news = useFetch("/announcements");
+  const gpa = grades.data?.gpa ?? null;
+  const graded = grades.data?.courses.filter((c) => c.grade).length ?? 0;
 
   return (
     <>
@@ -55,7 +60,9 @@ export default function StudentDashboard() {
             icon={ClipboardList} tone={overdue.length ? "bad" : "amber"} />
         </Reveal>
         <Reveal>
-          <StatCard label="Top marks" value={best?.marks ?? "—"} sub={best?.course?.courseName ?? "no marks yet"} icon={Trophy} tone="sky" />
+          <Link to="/student/grades" className="block h-full rounded-3xl">
+            <StatCard label="GPA" value={gpa ?? "—"} sub={gpa === null ? "no grades yet" : `across ${graded} graded course${graded === 1 ? "" : "s"}`} icon={Trophy} tone="sky" />
+          </Link>
         </Reveal>
       </Stagger>
 
@@ -75,6 +82,18 @@ export default function StudentDashboard() {
                 ))}
               </ul>
             </div>
+          </div>
+        </InView>
+      )}
+
+      {news.data?.announcements.length > 0 && (
+        <InView className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="flex items-center gap-2 text-[18px] font-bold text-ink"><Megaphone size={18} className="text-violet-500" aria-hidden="true" /> Latest news</h2>
+            <Link to="/student/announcements" className={linkClass}>All <ArrowUpRight size={15} /></Link>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {news.data.announcements.slice(0, 2).map((a) => <AnnouncementCard key={a._id} announcement={a} compact />)}
           </div>
         </InView>
       )}
@@ -100,7 +119,12 @@ export default function StudentDashboard() {
                       <div className="min-w-0">
                         <p className="font-display text-[16px] font-bold text-ink truncate">{e.course?.courseName ?? "Course"}</p>
                         <p className="text-[12px] text-muted">{e.attendedClasses}/{e.totalClasses} classes</p>
-                        <p className={cn("text-[12px] font-bold mt-0.5", tone.text)}>Marks: {e.marks}</p>
+                        <p className={cn("text-[12px] font-bold mt-0.5", tone.text)}>
+                          {(() => {
+                            const g = grades.data?.courses.find((c) => idOf(c.course) === idOf(e.course))?.grade;
+                            return g ? `Grade ${g.letter} · ${g.percent}%` : "Not graded yet";
+                          })()}
+                        </p>
                       </div>
                     </li>
                   );

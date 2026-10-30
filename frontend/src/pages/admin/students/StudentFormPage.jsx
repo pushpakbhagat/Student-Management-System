@@ -213,7 +213,7 @@ export default function StudentFormPage() {
             )}
             {isEdit && removedCourses.length > 0 && (
               <p className="text-[13px] font-medium text-amber-700 bg-amber-50 rounded-2xl px-4 py-3 mt-4">
-                Removing a course also deletes this student's attendance and marks for it.
+                Removing a course also deletes this student's attendance and grades for it.
               </p>
             )}
           </div>

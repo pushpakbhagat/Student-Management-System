@@ -7,7 +7,7 @@ import { cn } from "../../lib/cn";
 const FEATURES = [
   { icon: Users, tone: TONES.violet, title: "Student management", desc: "Add, edit and remove students, with photo, courses and login details." },
   { icon: BookOpen, tone: TONES.teal, title: "Courses", desc: "Create courses and manage who is enrolled in each one." },
-  { icon: CalendarCheck, tone: TONES.coral, title: "Attendance & marks", desc: "Mark a whole class present or absent at once and record marks per course." },
+  { icon: CalendarCheck, tone: TONES.coral, title: "Attendance & grades", desc: "Record each class day by day, and grade quizzes, assignments and exams with weights." },
   { icon: ClipboardList, tone: TONES.amber, title: "Assignments", desc: "Set coursework with due dates; students only see their own courses' work." },
   { icon: ShieldCheck, tone: TONES.sky, title: "Role-based access", desc: "Admins manage everything, students see only their data — enforced by the server." },
   { icon: LayoutDashboard, tone: TONES.pink, title: "Live dashboard", desc: "Enrollment, attendance and upcoming deadlines at a glance." },
@@ -18,8 +18,8 @@ const TECH = ["React 19", "Vite", "Tailwind CSS", "Motion", "Zustand", "React Ro
 const FLOW = [
   { title: "Admin signs in", desc: "Secure, httpOnly cookie session; every request is checked on the server." },
   { title: "Students are enrolled", desc: "Add students and choose their courses, or manage a whole course roster at once." },
-  { title: "Classes are recorded", desc: "Attendance and marks are saved per student, per course." },
-  { title: "Students follow along", desc: "Students log in to see their attendance, marks and upcoming assignments." },
+  { title: "Classes are recorded", desc: "Attendance is recorded per day and grades are entered per assessment." },
+  { title: "Students follow along", desc: "Students log in to see their attendance history, grades, news and upcoming assignments." },
 ];
 
 export default function About() {
