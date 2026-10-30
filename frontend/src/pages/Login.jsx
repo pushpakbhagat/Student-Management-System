@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, GraduationCap, UserCog } from "lucide-react";
+import { ArrowRight, GraduationCap, Presentation, UserCog } from "lucide-react";
 import api, { getErrorMessage } from "../api";
 import AuthLayout from "../components/layout/AuthLayout";
 import Button from "../components/ui/Button";
@@ -11,6 +11,7 @@ import { cn } from "../lib/cn";
 
 const ROLES = [
   { value: "student", label: "Student", icon: GraduationCap },
+  { value: "teacher", label: "Teacher", icon: Presentation },
   { value: "admin", label: "Admin", icon: UserCog },
 ];
 
@@ -66,12 +67,12 @@ export default function Login() {
 
       {setup.demo && (
         <div className="mb-7">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {ROLES.map(({ value, label, icon: Icon }) => (
               <Button key={value} variant="secondary" onClick={() => tryDemo(value)} loading={demoLoading === value}
-                disabled={Boolean(demoLoading)} className="h-12">
-                {demoLoading !== value && <Icon size={17} className="text-violet-500" aria-hidden="true" />}
-                Try as {label.toLowerCase()}
+                disabled={Boolean(demoLoading)} className="h-auto py-2.5 flex-col gap-1 px-2">
+                {demoLoading !== value && <Icon size={18} className="text-violet-500" aria-hidden="true" />}
+                <span className="text-[12px] leading-tight">Try as<br />{label.toLowerCase()}</span>
               </Button>
             ))}
           </div>
@@ -84,7 +85,7 @@ export default function Login() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
         <fieldset>
           <legend className="text-[13px] font-semibold text-ink-soft mb-2">I am a</legend>
-          <div className="relative grid grid-cols-2 p-1.5 rounded-2xl bg-violet-50/80 border border-violet-100">
+          <div className="relative grid grid-cols-3 p-1.5 rounded-2xl bg-violet-50/80 border border-violet-100">
             {ROLES.map(({ value, label, icon: Icon }) => (
               <label key={value} className="relative cursor-pointer">
                 <input
@@ -104,7 +105,7 @@ export default function Login() {
                 )}
                 <span
                   className={cn(
-                    "relative flex items-center justify-center gap-2 h-11 rounded-xl text-[14px] font-semibold transition-colors",
+                    "relative flex items-center justify-center gap-1.5 h-11 rounded-xl text-[13px] sm:text-[14px] font-semibold transition-colors",
                     "peer-focus-visible:outline-2 peer-focus-visible:outline-violet-500",
                     form.role === value ? "text-violet-700" : "text-muted hover:text-ink-soft"
                   )}

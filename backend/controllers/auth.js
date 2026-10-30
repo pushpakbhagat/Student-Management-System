@@ -11,16 +11,19 @@ const {
     clearAuthCookie,
     hashPassword,
     modelForRole,
+    accountHasRole,
     normalizeEmail,
     findByEmail,
     isDemoAccount,
     COOKIE_NAME,
 } = require("../services/auth")
+const { courseScope } = require("../services/scope")
 const { HttpError, pick, requireFields } = require("../utils/http")
 
-const ADMIN_FIELDS = ["firstName", "lastName", "gender", "email", "password", "imgURL"]
+const STAFF_FIELDS = ["firstName", "lastName", "gender", "email", "password", "imgURL"]
 
-// Sets the cookie and sends what each role's app needs to start
+// Sets the cookie and sends what each role's app needs to start.
+// Teachers get the same shape as admins, limited to their own courses.
 async function startSession(res, user, role) {
     setAuthCookie(res, generateToken(user, role))
 
@@ -28,10 +31,11 @@ async function startSession(res, user, role) {
         return res.status(200).json({ student: user })
     }
 
+    const scope = await courseScope({ id: user._id, role })
     const [StudentData, courseData, assignmentData] = await Promise.all([
-        Student.find({}).sort({ createdAt: -1 }),
-        Course.find({}).sort({ courseName: 1 }),
-        Assignment.find({}),
+        Student.find(scope ? { "courses.course": scope } : {}).sort({ createdAt: -1 }),
+        Course.find(scope ? { _id: scope } : {}).sort({ courseName: 1 }),
+        Assignment.find(scope ? { course: scope } : {}),
     ])
     return res.status(200).json({ Data: { admin: user, StudentData, courseData, assignmentData } })
 }
@@ -45,11 +49,11 @@ async function handleLogin(req, res) {
     }
     const Model = modelForRole(role)
     if (!Model) {
-        throw new HttpError(400, "Choose whether you are signing in as a student or an admin")
+        throw new HttpError(400, "Choose whether you are signing in as a student, teacher or admin")
     }
 
     const user = await findByEmail(Model, email)
-    const isMatch = user && await bcrypt.compare(password, user.password)
+    const isMatch = user && accountHasRole(user, role) && await bcrypt.compare(password, user.password)
     // same message for "no user" and "wrong password" so nobody can probe which emails exist
     if (!isMatch) {
         throw new HttpError(401, "Wrong email or password")
@@ -63,10 +67,10 @@ async function handleDemoLogin(req, res) {
     if (!env.demoMode) throw new HttpError(404, "Demo mode is off")
     const role = req.body?.role
     const Model = modelForRole(role)
-    if (!Model) throw new HttpError(400, "Choose the admin or student demo")
+    if (!Model) throw new HttpError(400, "Choose the admin, teacher or student demo")
 
     const user = await findByEmail(Model, env.demoAccounts[role])
-    if (!user) throw new HttpError(404, "The demo account doesn't exist yet. Run the seed script.")
+    if (!user || !accountHasRole(user, role)) throw new HttpError(404, "The demo account doesn't exist yet. Run the seed script.")
     return startSession(res, user, role)
 }
 
@@ -120,33 +124,52 @@ async function updateMyPhoto(req, res) {
     return res.status(200).json({ user: req.account })
 }
 
-// ADMIN SIGN-UP ------------------------------------------------------------------
-// Open only while there are no admins yet (first-time setup). After that, only a
-// logged-in admin can create another admin.
+// STAFF ACCOUNTS -----------------------------------------------------------------
+// Public sign-up is open only while there are no admins yet (first-time setup) and always
+// creates an admin. After that, only a logged-in admin can add admins or teachers.
+const ANY_ADMIN = { role: { $ne: "teacher" } }
+
 async function getSetupStatus(req, res) {
-    const adminExists = await Admin.exists({})
+    const adminExists = await Admin.exists(ANY_ADMIN)
     return res.status(200).json({ adminSignupOpen: !adminExists, demo: env.demoMode })
 }
 
 async function handleNewAdmin(req, res) {
-    const adminExists = await Admin.exists({})
+    const adminExists = await Admin.exists(ANY_ADMIN)
+    let role = "admin"
     if (adminExists) {
         const session = await findAccountForToken(req.cookies?.[COOKIE_NAME])
         if (session?.role !== "admin") {
             throw new HttpError(403, "Admin sign-up is closed. Ask an existing admin to create your account.")
         }
+        if (req.body?.role === "teacher") role = "teacher"
     }
 
-    const body = pick(req.body, ADMIN_FIELDS)
+    const body = pick(req.body, STAFF_FIELDS)
     requireFields(body, ["firstName", "lastName", "gender", "email", "password"])
     body.email = normalizeEmail(body.email)
     body.password = await hashPassword(body.password)
 
-    const admin = await Admin.create(body)
-    return res.status(201).json(admin)
+    const staff = await Admin.create({ ...body, role })
+    return res.status(201).json(staff)
+}
+
+// Everyone on staff, with the courses each teacher has (admins only)
+async function listStaff(req, res) {
+    const [staff, courses] = await Promise.all([
+        Admin.find({}).sort({ role: 1, firstName: 1 }),
+        Course.find({ "teachers.0": { $exists: true } }, "courseName teachers"),
+    ])
+    const result = staff.map(s => ({
+        ...s.toJSON(),
+        role: s.role ?? "admin",
+        courses: courses.filter(c => c.teachers.some(t => String(t) === String(s._id))).map(c => ({ _id: c._id, courseName: c.courseName })),
+    }))
+    return res.status(200).json({ staff: result })
 }
 
 module.exports = {
+    listStaff,
     handleLogin,
     handleDemoLogin,
     handleLogout,

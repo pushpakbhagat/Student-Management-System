@@ -18,7 +18,13 @@ const CourseSchema = new mongoose.Schema({
     assignments: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Assignment"
-    }]
+    }],
+
+    // staff with role "teacher" who manage this course
+    teachers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin"
+    }],
 }, {timestamps: true})
 
 

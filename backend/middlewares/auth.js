@@ -26,9 +26,12 @@ function requireRole(...roles) {
 }
 
 const requireAdmin = requireRole("admin")
+// admins and teachers; controllers then limit teachers to their own courses (services/scope.js)
+const requireStaff = requireRole("admin", "teacher")
 
 module.exports = {
     requireAuth,
     requireRole,
     requireAdmin,
+    requireStaff,
 }

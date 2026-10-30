@@ -2,6 +2,7 @@ const Course = require("../models/Courses")
 const Student = require("../models/student")
 const Assessment = require("../models/Assessment")
 const { computeGrade, gpa, scoreOf } = require("../services/grades")
+const { assertCourseAccess } = require("../services/scope")
 const { HttpError, assertValidId, pick } = require("../utils/http")
 
 const FIELDS = ["title", "kind", "maxScore", "weight", "date"]
@@ -9,6 +10,7 @@ const FIELDS = ["title", "kind", "maxScore", "weight", "date"]
 async function listAssessments(req, res) {
     const { CourseId } = req.params
     assertValidId(CourseId, "course id")
+    await assertCourseAccess(req.user, CourseId)
     const assessments = await Assessment.find({ course: CourseId }).sort({ date: 1, createdAt: 1 })
     return res.status(200).json({ assessments })
 }
@@ -17,6 +19,7 @@ async function createAssessment(req, res) {
     const { CourseId } = req.params
     assertValidId(CourseId, "course id")
     if (!await Course.exists({ _id: CourseId })) throw new HttpError(404, "Course not found")
+    await assertCourseAccess(req.user, CourseId)
 
     const body = pick(req.body, FIELDS)
     if (!body.title || body.maxScore === undefined || body.weight === undefined) {
@@ -31,6 +34,7 @@ async function updateAssessment(req, res) {
     assertValidId(id, "assessment id")
     const assessment = await Assessment.findById(id)
     if (!assessment) throw new HttpError(404, "Assessment not found")
+    await assertCourseAccess(req.user, assessment.course)
 
     Object.assign(assessment, pick(req.body, FIELDS))
     if (assessment.scores.some(s => s.score > assessment.maxScore)) {
@@ -46,6 +50,7 @@ async function setScores(req, res) {
     assertValidId(id, "assessment id")
     const assessment = await Assessment.findById(id)
     if (!assessment) throw new HttpError(404, "Assessment not found")
+    await assertCourseAccess(req.user, assessment.course)
     if (!Array.isArray(req.body?.scores)) throw new HttpError(400, "scores must be a list")
 
     const enrolled = new Set((await Student.find({ "courses.course": assessment.course }, "_id")).map(s => String(s._id)))
@@ -73,8 +78,10 @@ async function setScores(req, res) {
 async function deleteAssessment(req, res) {
     const { id } = req.params
     assertValidId(id, "assessment id")
-    const assessment = await Assessment.findByIdAndDelete(id)
+    const assessment = await Assessment.findById(id)
     if (!assessment) throw new HttpError(404, "Assessment not found")
+    await assertCourseAccess(req.user, assessment.course)
+    await assessment.deleteOne()
     return res.status(200).json({ msg: "Assessment deleted" })
 }
 

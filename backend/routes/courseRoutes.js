@@ -9,6 +9,7 @@ const {
     enrollStudentInMultipleCourses,
     enrollMultipleStudentsInSingleCourse,
     unenrollStudent,
+    setCourseTeachers,
 } = require("../controllers/courses")
 const { requireAuth, requireAdmin } = require("../middlewares/auth")
 
@@ -22,6 +23,7 @@ router.post('/enrollcourse', requireAdmin, enrollStudentInCourse)
 router.patch('/enrollmultiplecourses', requireAdmin, enrollStudentInMultipleCourses)
 router.patch('/enrollmultiplestudents', requireAdmin, enrollMultipleStudentsInSingleCourse)
 router.delete('/courses/:CourseId/students/:StudentId', requireAdmin, unenrollStudent)
+router.put('/courses/:CourseId/teachers', requireAdmin, setCourseTeachers)
 
 
 module.exports = router

@@ -12,6 +12,7 @@ const studentRouter = require("./routes/studentRoutes")
 const courseRouter = require("./routes/courseRoutes")
 const assignmentRouter = require("./routes/assignmentRoutes")
 const academicRouter = require("./routes/academicRoutes")
+const insightRouter = require("./routes/insightRoutes")
 
 // The app is built here and started in index.js, so tests can use it without opening a port
 const app = express()
@@ -47,6 +48,7 @@ app.use(studentRouter)
 app.use(courseRouter)
 app.use(assignmentRouter)
 app.use(academicRouter)
+app.use(insightRouter)
 
 // ERRORS (must come last) --------------------------------
 app.use(notFound)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { BookOpen, CalendarCheck, ClipboardList, CornerDownLeft, LogOut, Palette, Search, UserPlus } from "lucide-react";
+import { BookOpen, CalendarCheck, ClipboardList, CornerDownLeft, FileText, GraduationCap, LogOut, Palette, Search, UserPlus } from "lucide-react";
 import Avatar from "./ui/Avatar";
 import useSessionStore from "../store/useSessionStore";
 import useAdminStore from "../store/useAdminStore";
@@ -42,29 +42,31 @@ export default function CommandPalette({ nav, onClose }) {
   const items = useMemo(() => {
     const go = (to) => () => navigate(to);
     const isAdmin = role === "admin";
+    const staff = role === "admin" || role === "teacher";
     const all = [
       ...nav.map((n) => ({ id: `page-${n.to}`, group: "Pages", label: n.label, icon: n.icon, run: go(n.to) })),
-      ...(isAdmin
+      ...(isAdmin ? [{ id: "a-add", group: "Actions", label: "Add a student", icon: UserPlus, run: go("/admin/students/new") }] : []),
+      ...(staff
         ? [
-            { id: "a-add", group: "Actions", label: "Add a student", icon: UserPlus, run: go("/admin/students/new") },
             { id: "a-att", group: "Actions", label: "Take attendance", icon: CalendarCheck, run: go("/admin/attendance") },
+            { id: "a-grd", group: "Actions", label: "Enter grades", icon: GraduationCap, run: go("/admin/grades") },
             { id: "a-asg", group: "Actions", label: "Create an assignment", icon: ClipboardList, run: go("/admin/assignments") },
           ]
-        : []),
+        : [{ id: "a-report", group: "Actions", label: "My report card", hint: "print or save as PDF", icon: FileText, run: go("/student/report") }]),
       { id: "a-theme", group: "Actions", label: "Switch theme", hint: "light / dark / system", icon: Palette, run: cycleTheme, keepOpen: true },
       {
         id: "a-logout", group: "Actions", label: "Log out", icon: LogOut,
         run: async () => { await logout(); navigate("/", { replace: true }); },
       },
-      ...(isAdmin
-        ? students.map((s) => ({ id: `s-${s._id}`, group: "Students", label: fullName(s), hint: s.email, person: s, run: go(`/admin/students/${s._id}/edit`) }))
+      ...(staff
+        ? students.map((s) => ({ id: `s-${s._id}`, group: "Students", label: fullName(s), hint: s.email, person: s, run: go(`/admin/students/${s._id}/${isAdmin ? "edit" : "report"}`) }))
         : []),
-      ...(isAdmin
-        ? courses.map((c) => ({ id: `c-${c._id}`, group: "Courses", label: c.courseName, icon: BookOpen, tone: toneFor(c._id), run: go("/admin/courses") }))
+      ...(staff
+        ? courses.map((c) => ({ id: `c-${c._id}`, group: "Courses", label: c.courseName, icon: BookOpen, tone: toneFor(c._id), run: go(isAdmin ? "/admin/courses" : "/admin/grades") }))
         : (profile?.courses || []).map((e) => ({ id: `c-${idOf(e.course)}`, group: "Courses", label: e.course?.courseName ?? "Course", icon: BookOpen, tone: toneFor(idOf(e.course)), run: go("/student/attendance") }))),
-      ...(isAdmin ? adminAssignments : portalAssignments).map((a) => ({
+      ...(staff ? adminAssignments : portalAssignments).map((a) => ({
         id: `as-${a._id}`, group: "Assignments", label: a.title, icon: ClipboardList, tone: toneFor(idOf(a.course)),
-        run: go(isAdmin ? "/admin/assignments" : "/student/assignments"),
+        run: go(staff ? "/admin/assignments" : "/student/assignments"),
       })),
     ];
     return all;
@@ -116,7 +118,7 @@ export default function CommandPalette({ nav, onClose }) {
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActive(0); }}
             onKeyDown={onKeyDown}
-            placeholder={role === "admin" ? "Search students, courses, pages…" : "Search courses, assignments, pages…"}
+            placeholder={role === "student" ? "Search courses, assignments, pages…" : "Search students, courses, pages…"}
             className="flex-1 h-14 bg-transparent outline-none text-[16px] text-ink placeholder:text-muted"
             role="combobox"
             aria-expanded="true"

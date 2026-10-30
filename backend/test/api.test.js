@@ -316,6 +316,80 @@ test("profile photos: uploaded images and web addresses are accepted, scripts ar
     assert.equal((await adminAgent.patch("/me/photo").send({ imgURL: "" })).status, 200)
 })
 
+test("teachers only manage the courses assigned to them", async () => {
+    const a = (await adminAgent.post("/courses").send({ courseName: "Teach A" })).body.course
+    const b = (await adminAgent.post("/courses").send({ courseName: "Teach B" })).body.course
+    await adminAgent.post("/enrollcourse").send({ StudentId: studentId, CourseId: a._id })
+
+    const t = await adminAgent.post("/admins").send({ firstName: "Tina", lastName: "Teach", gender: "Female", email: "tina@test.com", password: "teacher123", role: "teacher" })
+    assert.equal(t.status, 201)
+    assert.equal(t.body.role, "teacher")
+    assert.equal((await adminAgent.put(`/courses/${a._id}/teachers`).send({ teacherIds: [t.body._id] })).status, 200)
+    const adminId = (await adminAgent.get("/me")).body.user._id
+    assert.equal((await adminAgent.put(`/courses/${b._id}/teachers`).send({ teacherIds: [adminId] })).status, 400)
+
+    // a teacher can't come in through the admin door
+    assert.equal((await request(app).post("/logininfo").send({ email: "tina@test.com", password: "teacher123", role: "admin" })).status, 401)
+
+    const teacher = request.agent(app)
+    const login = await teacher.post("/logininfo").send({ email: "tina@test.com", password: "teacher123", role: "teacher" })
+    assert.equal(login.status, 200)
+    assert.deepEqual(login.body.Data.courseData.map(c => c.courseName), ["Teach A"])
+    assert.ok(login.body.Data.StudentData.length > 0)
+    assert.ok(login.body.Data.StudentData.every(s => s.courses.some(e => e.course === a._id)))
+    assert.deepEqual((await teacher.get("/courses")).body.Courses.map(c => c.courseName), ["Teach A"])
+
+    const records = [{ student: studentId, status: "present" }]
+    assert.equal((await teacher.post(`/courses/${a._id}/sessions`).send({ date: "2030-03-01", records })).status, 201)
+    assert.equal((await teacher.post(`/courses/${b._id}/sessions`).send({ date: "2030-03-01", records })).status, 403)
+    assert.equal((await teacher.post(`/courses/${b._id}/assessments`).send({ title: "x", maxScore: 10, weight: 10 })).status, 403)
+    assert.equal((await teacher.post("/announcements").send({ title: "To everyone" })).status, 403)
+    assert.equal((await teacher.post("/announcements").send({ title: "To my class", course: a._id })).status, 201)
+    assert.equal((await teacher.post("/assignments").send({ CourseId: b._id, title: "Nope", dueDate: "2030-01-01" })).status, 403)
+    assert.equal((await teacher.post("/students").send({ ...student, email: "x@test.com" })).status, 403)
+    assert.equal((await teacher.post("/courses").send({ courseName: "Mine" })).status, 403)
+    assert.equal((await teacher.post("/admins").send({ ...admin, email: "y@test.com" })).status, 403)
+    assert.equal((await teacher.get("/staff")).status, 403)
+    assert.equal((await teacher.get(`/students/${studentId}/report`)).status, 200)
+
+    const staff = await adminAgent.get("/staff")
+    assert.equal(staff.body.staff.find(s => s.email === "tina@test.com").courses.length, 1)
+})
+
+test("insights: at-risk students, chart data, report cards and notifications", async () => {
+    const course = (await adminAgent.post("/courses").send({ courseName: "Risk 101" })).body.course
+    const weak = (await adminAgent.post("/students").send({ ...student, firstName: "Wes", email: "wes@test.com" })).body
+    await adminAgent.post("/enrollcourse").send({ StudentId: weak._id, CourseId: course._id })
+    for (const date of ["2030-04-01", "2030-04-02", "2030-04-03"]) {
+        await adminAgent.post(`/courses/${course._id}/sessions`).send({ date, records: [{ student: weak._id, status: "absent" }] })
+    }
+    const quiz = (await adminAgent.post(`/courses/${course._id}/assessments`).send({ title: "Q", maxScore: 10, weight: 100 })).body.assessment
+    await adminAgent.put(`/assessments/${quiz._id}/scores`).send({ scores: [{ student: weak._id, score: 3 }] })
+
+    const wes = (await adminAgent.get("/insights/at-risk")).body.students.find(r => r.student.email === "wes@test.com")
+    assert.equal(wes.level, "high")
+    assert.equal(wes.reasons.length, 3)   // low attendance, failing, missed last 3
+
+    const overview = (await adminAgent.get("/stats/overview")).body
+    assert.ok(overview.gradeDistribution.F >= 1)
+    assert.ok(overview.attendanceTrend.length >= 3)
+    assert.equal(overview.coursePerformance.find(c => c.courseName === "Risk 101").averageLetter, "F")
+
+    const report = (await adminAgent.get(`/students/${weak._id}/report`)).body.report
+    assert.equal(report.courses[0].grade.letter, "F")
+    assert.equal(report.attendance.pct, 0)
+
+    assert.ok((await adminAgent.get("/me/notifications")).body.notifications.some(n => n.type === "risk"))
+
+    const wesAgent = request.agent(app)
+    await wesAgent.post("/logininfo").send({ email: "wes@test.com", password: student.password, role: "student" })
+    const notes = (await wesAgent.get("/me/notifications")).body.notifications
+    assert.ok(notes.some(n => n.type === "attendance"))
+    assert.ok(notes.some(n => n.type === "grade"))
+    assert.equal((await wesAgent.get("/me/report")).body.report.courses[0].grade.letter, "F")
+    assert.equal((await wesAgent.get(`/students/${weak._id}/report`)).status, 403)
+})
+
 test("logout clears the cookie and unknown routes return 404 JSON", async () => {
     const res = await studentAgent.post("/logout")
     assert.equal(res.status, 200)

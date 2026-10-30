@@ -12,6 +12,7 @@ const Announcement = require("./models/Announcement");
 const { applyCounterChanges } = require("./services/attendance");
 
 const DEMO_ADMIN_PASSWORD = "admin123";
+const DEMO_TEACHER_PASSWORD = "teacher123";
 
 // Small deterministic random generator, so every seed produces the same demo data
 function makeRandom(seed) {
@@ -87,6 +88,19 @@ const seedDatabase = async () => {
             { courseName: "Computer Science" },
         ]);
         console.log("✅ Courses created");
+
+        // ── Seed a teacher for two of the courses ────
+        const teacher = await Admin.create({
+            role: "teacher",
+            firstName: "Anita",
+            lastName: "Desai",
+            email: "teacher@studenthub.com",
+            password: await bcrypt.hash(DEMO_TEACHER_PASSWORD, 10),
+            gender: "Female",
+            imgURL: "",
+        });
+        await Course.updateMany({ _id: { $in: [courses[0]._id, courses[1]._id] } }, { $set: { teachers: [teacher._id] } });
+        console.log("✅ Teacher created");
 
         // ── Seed Students (each enrolled in every course) ──
         const students = [
@@ -176,6 +190,7 @@ const seedDatabase = async () => {
         console.log("\n🎉 Database seeded successfully!");
         console.log("─────────────────────────────────");
         console.log(`Admin   → admin@studenthub.com   / ${DEMO_ADMIN_PASSWORD}`);
+        console.log(`Teacher → teacher@studenthub.com / ${DEMO_TEACHER_PASSWORD}`);
         console.log(`Student → rahul@studenthub.com   / ${DEMO_STUDENT_PASSWORD}`);
         console.log("─────────────────────────────────");
 

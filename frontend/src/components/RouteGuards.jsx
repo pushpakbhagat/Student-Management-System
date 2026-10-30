@@ -2,15 +2,22 @@ import { Navigate, useLocation } from "react-router-dom";
 import useSessionStore, { homeFor } from "../store/useSessionStore";
 import { FullPageLoader } from "./ui/Feedback";
 
-// Only for logged-in users with the given role; everyone else is sent to the right place
-export function RequireRole({ role, children }) {
+// Only for logged-in users with one of the given roles; everyone else is sent to the right place
+export function RequireRole({ roles, children }) {
   const status = useSessionStore((s) => s.status);
   const currentRole = useSessionStore((s) => s.role);
   const location = useLocation();
 
   if (status === "loading") return <FullPageLoader />;
   if (status !== "authenticated") return <Navigate to="/" replace state={{ from: location.pathname }} />;
-  if (currentRole !== role) return <Navigate to={homeFor(currentRole)} replace />;
+  if (!roles.includes(currentRole)) return <Navigate to={homeFor(currentRole)} replace />;
+  return children;
+}
+
+// Admin-only pages inside the staff area: teachers are sent back to the dashboard
+export function AdminOnly({ children }) {
+  const role = useSessionStore((s) => s.role);
+  if (role !== "admin") return <Navigate to="/admin/dashboard" replace />;
   return children;
 }
 

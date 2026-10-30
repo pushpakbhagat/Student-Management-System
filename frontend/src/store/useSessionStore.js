@@ -34,7 +34,7 @@ const useSessionStore = create((set, get) => ({
   },
 
   startSession: (role, data) => {
-    if (role === "admin") {
+    if (isStaff(role)) {
       const { admin, StudentData, courseData, assignmentData } = data.Data;
       useAdminStore.getState().hydrate({ students: StudentData, courses: courseData, assignments: assignmentData });
       set({ status: "authenticated", role, user: admin });
@@ -71,8 +71,13 @@ const useSessionStore = create((set, get) => ({
 
 setUnauthorizedHandler(() => useSessionStore.getState().expire());
 
+// Admins and teachers share the staff area (/admin); teachers just see less of it
+export function isStaff(role) {
+  return role === "admin" || role === "teacher";
+}
+
 export function homeFor(role) {
-  return role === "admin" ? "/admin" : "/student";
+  return isStaff(role) ? "/admin" : "/student";
 }
 
 export default useSessionStore;

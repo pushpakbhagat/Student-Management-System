@@ -10,6 +10,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { Spinner } from "../../components/ui/Feedback";
 import { Field, FormError, Input, Select, Textarea } from "../../components/ui/Form";
 import useAdminStore from "../../store/useAdminStore";
+import useSessionStore from "../../store/useSessionStore";
 import { useFetch } from "../../lib/useFetch";
 
 const EMPTY = { title: "", body: "", course: "", pinned: false };
@@ -20,11 +21,14 @@ function sortAnnouncements(list) {
 
 export default function Announcements() {
   const courses = useAdminStore((s) => s.courses);
+  const isAdmin = useSessionStore((s) => s.role) === "admin";
+  // teachers can only post to their own courses, so they start on the first one
+  const empty = isAdmin ? EMPTY : { ...EMPTY, course: courses[0]?._id ?? "" };
   const { data, loading, setData } = useFetch("/announcements");
   const list = data?.announcements ?? [];
   const setList = (update) => setData((d) => ({ announcements: sortAnnouncements(update(d?.announcements ?? [])) }));
 
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(empty);
   const [error, setError] = useState("");
   const [posting, setPosting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -40,7 +44,7 @@ export default function Announcements() {
     try {
       const { data: res } = await api.post("/announcements", { ...form, title: form.title.trim(), course: form.course || null });
       setList((l) => [res.announcement, ...l]);
-      setForm(EMPTY);
+      setForm(empty);
       toast.success("Announcement posted 📣");
     } catch (err) {
       setError(getErrorMessage(err));
@@ -86,7 +90,7 @@ export default function Announcements() {
             <Field label="Who should see it?">
               {(p) => (
                 <Select {...p} name="course" value={form.course} onChange={update}>
-                  <option value="">Everyone</option>
+                  {isAdmin && <option value="">Everyone</option>}
                   {courses.map((c) => <option key={c._id} value={c._id}>Students in {c.courseName}</option>)}
                 </Select>
               )}
@@ -112,7 +116,7 @@ export default function Announcements() {
                   <motion.li key={a._id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -40 }}>
                     <AnnouncementCard
                       announcement={a}
-                      actions={
+                      actions={(isAdmin || a.course) &&
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => togglePin(a)} aria-label={a.pinned ? "Unpin" : "Pin to top"} title={a.pinned ? "Unpin" : "Pin to top"}>
                             {a.pinned ? <PinOff size={16} /> : <Pin size={16} />}

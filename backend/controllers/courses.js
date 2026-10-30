@@ -5,6 +5,7 @@ const Assignment = require("../models/Assignment")
 const AttendanceSession = require("../models/AttendanceSession")
 const Assessment = require("../models/Assessment")
 const Announcement = require("../models/Announcement")
+const Admin = require("../models/admin")
 const { HttpError, isValidId, assertValidId } = require("../utils/http")
 
 function newEnrollment(courseId) {
@@ -26,10 +27,14 @@ async function handleNewCourse(req, res) {
     return res.status(201).json({ msg: "Course created", course })
 }
 
-// Admins get full rosters; students only see the names of their own courses
+// Admins get every course, teachers the ones they teach, students only the names of their own
 async function getAllCourses(req, res) {
     if (req.user.role === "admin") {
         const courses = await Course.find({}).sort({ courseName: 1 })
+        return res.status(200).json({ msg: "Courses fetched", Courses: courses })
+    }
+    if (req.user.role === "teacher") {
+        const courses = await Course.find({ teachers: req.user.id }).sort({ courseName: 1 })
         return res.status(200).json({ msg: "Courses fetched", Courses: courses })
     }
 
@@ -169,7 +174,23 @@ async function unenrollStudent(req, res) {
 }
 
 
+// Replace the list of teachers on a course (admins only)
+async function setCourseTeachers(req, res) {
+    const { CourseId } = req.params
+    assertValidId(CourseId, "course id")
+    const ids = req.body?.teacherIds
+    if (!Array.isArray(ids) || !ids.every(isValidId)) throw new HttpError(400, "teacherIds must be a list of staff ids")
+
+    const teachers = await Admin.find({ _id: { $in: ids }, role: "teacher" }, "_id")
+    if (teachers.length !== new Set(ids.map(String)).size) throw new HttpError(400, "Only teacher accounts can be assigned to a course")
+
+    const course = await Course.findByIdAndUpdate(CourseId, { teachers: teachers.map(t => t._id) }, { returnDocument: "after" })
+    if (!course) throw new HttpError(404, "Course not found")
+    return res.status(200).json({ course })
+}
+
 module.exports = {
+    setCourseTeachers,
     handleNewCourse,
     getAllCourses,
     deleteCourse,

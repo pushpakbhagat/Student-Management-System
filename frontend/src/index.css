@@ -147,6 +147,21 @@
   }
 }
 
+/* Printing (report cards): always light, no app chrome, sensible margins */
+@media print {
+  @page { margin: 14mm; }
+  :root, [data-theme="dark"] {
+    --color-canvas: #ffffff;
+    --color-surface: #ffffff;
+    --color-ink: #111827;
+    --color-ink-soft: #374151;
+    --color-muted: #6b7280;
+    --color-line: #e5e7eb;
+  }
+  body { background: #ffffff !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

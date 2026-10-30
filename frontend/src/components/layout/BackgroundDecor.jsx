@@ -1,7 +1,7 @@
 // Soft, slowly drifting colour blobs behind every page (purely decorative)
 export default function BackgroundDecor() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none" aria-hidden="true">
+    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none print:hidden" aria-hidden="true">
       <div className="absolute -top-40 -left-32 w-[560px] h-[560px] rounded-full bg-violet-300/35 blur-[110px] animate-drift" />
       <div
         className="absolute top-1/3 -right-40 w-[520px] h-[520px] rounded-full bg-fuchsia-300/25 blur-[120px] animate-drift"

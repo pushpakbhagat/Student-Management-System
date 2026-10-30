@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import api, { getErrorMessage } from "../../../api";
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
@@ -11,6 +11,7 @@ import { Badge } from "../../../components/ui/Feedback";
 import { Input } from "../../../components/ui/Form";
 import { Reveal, Stagger } from "../../../components/ui/Motion";
 import useAdminStore from "../../../store/useAdminStore";
+import useSessionStore from "../../../store/useSessionStore";
 import { attendanceOf, attendanceTone, fullName, idOf } from "../../../lib/format";
 import { buttonClass } from "../../../lib/buttonStyles";
 import { dateStamp, downloadCsv } from "../../../lib/csv";
@@ -22,6 +23,7 @@ export default function StudentsPage() {
   const students = useAdminStore((s) => s.students);
   const courses = useAdminStore((s) => s.courses);
   const removeStudent = useAdminStore((s) => s.removeStudent);
+  const isAdmin = useSessionStore((s) => s.role) === "admin";
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -78,9 +80,11 @@ export default function StudentsPage() {
             <Button variant="secondary" onClick={exportCsv} disabled={!students.length}>
               <Download size={17} aria-hidden="true" /> Export CSV
             </Button>
-            <Link to="/admin/students/new" className={buttonClass()}>
-              <Plus size={18} aria-hidden="true" /> Add student
-            </Link>
+            {isAdmin && (
+              <Link to="/admin/students/new" className={buttonClass()}>
+                <Plus size={18} aria-hidden="true" /> Add student
+              </Link>
+            )}
           </>
         }
       />
@@ -205,15 +209,24 @@ function CourseBadges({ student, courseName }) {
   );
 }
 
+// Everyone on staff can open the report card; only admins edit or delete
 function RowActions({ student, onDelete, className = "justify-end" }) {
+  const isAdmin = useSessionStore((s) => s.role) === "admin";
   return (
-    <div className={`flex gap-2 ${className}`}>
-      <Link to={`/admin/students/${student._id}/edit`} className={buttonClass({ variant: "secondary", size: "sm" })}>
-        <Pencil size={14} aria-hidden="true" /> Edit
+    <div className={`flex flex-wrap gap-2 ${className}`}>
+      <Link to={`/admin/students/${student._id}/report`} className={buttonClass({ variant: "secondary", size: "sm" })}>
+        <FileText size={14} aria-hidden="true" /> Report
       </Link>
-      <Button variant="danger" size="sm" onClick={onDelete} aria-label={`Delete ${fullName(student)}`}>
-        <Trash2 size={14} aria-hidden="true" /> Delete
-      </Button>
+      {isAdmin && (
+        <>
+          <Link to={`/admin/students/${student._id}/edit`} className={buttonClass({ variant: "secondary", size: "sm" })}>
+            <Pencil size={14} aria-hidden="true" /> Edit
+          </Link>
+          <Button variant="danger" size="sm" onClick={onDelete} aria-label={`Delete ${fullName(student)}`}>
+            <Trash2 size={14} aria-hidden="true" /> Delete
+          </Button>
+        </>
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ const env = {
     demoMode: process.env.DEMO_MODE === "true",
     demoAccounts: {
         admin: process.env.DEMO_ADMIN_EMAIL || "admin@studenthub.com",
+        teacher: process.env.DEMO_TEACHER_EMAIL || "teacher@studenthub.com",
         student: process.env.DEMO_STUDENT_EMAIL || "rahul@studenthub.com",
     },
 }

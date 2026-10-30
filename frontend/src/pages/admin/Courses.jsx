@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
-import { BookOpen, Check, ClipboardList, Plus, Trash2, Users } from "lucide-react";
+import { BookOpen, Check, ClipboardList, Plus, Presentation, Trash2, Users } from "lucide-react";
 import api, { getErrorMessage } from "../../api";
 import Avatar from "../../components/ui/Avatar";
 import Button from "../../components/ui/Button";
@@ -14,6 +14,7 @@ import { fullName, idOf } from "../../lib/format";
 import { toneFor } from "../../lib/palette";
 import { cn } from "../../lib/cn";
 import { scrollToElement } from "../../lib/smoothScroll";
+import { useFetch } from "../../lib/useFetch";
 
 export default function Courses() {
   const courses = useAdminStore((s) => s.courses);
@@ -27,6 +28,10 @@ export default function Courses() {
   const [openId, setOpenId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const staff = useFetch("/staff");
+  const teachers = (staff.data?.staff ?? []).filter((m) => m.role === "teacher");
+  const teacherName = new Map(teachers.map((t) => [t._id, fullName(t)]));
 
   const enrolledIn = (courseId) => students.filter((s) => s.courses?.some((e) => idOf(e.course) === courseId));
   const assignmentCount = (courseId) => assignments.filter((a) => idOf(a.course) === courseId).length;
@@ -100,6 +105,12 @@ export default function Courses() {
                       <span className="inline-flex items-center gap-1.5"><Users size={15} className={tone.text} aria-hidden="true" />{enrolled.length} student{enrolled.length === 1 ? "" : "s"}</span>
                       <span className="inline-flex items-center gap-1.5"><ClipboardList size={15} className={tone.text} aria-hidden="true" />{assignmentCount(course._id)} assignment{assignmentCount(course._id) === 1 ? "" : "s"}</span>
                     </div>
+                    <p className="flex items-center gap-1.5 text-[13px] text-muted mt-2">
+                      <Presentation size={14} aria-hidden="true" />
+                      {(course.teachers ?? []).length
+                        ? (course.teachers ?? []).map((id) => teacherName.get(idOf(id)) ?? "Teacher").join(", ")
+                        : "No teacher assigned"}
+                    </p>
                     <div className="flex -space-x-2 mt-4 min-h-9">
                       {enrolled.slice(0, 6).map((s) => <Avatar key={s._id} person={s} size="sm" className="rounded-full" />)}
                       {enrolled.length > 6 && (
@@ -125,7 +136,7 @@ export default function Courses() {
 
       <AnimatePresence>
         {openCourse && (
-          <RosterEditor key={openCourse._id} course={openCourse} enrolled={enrolledIn(openCourse._id)} onDone={() => setOpenId(null)} />
+          <RosterEditor key={openCourse._id} course={openCourse} enrolled={enrolledIn(openCourse._id)} teachers={teachers} onDone={() => setOpenId(null)} />
         )}
       </AnimatePresence>
 
@@ -146,9 +157,12 @@ export default function Courses() {
 }
 
 // Checklist of every student; saving enrolls the newly ticked and removes the unticked
-function RosterEditor({ course, enrolled, onDone }) {
+function RosterEditor({ course, enrolled, teachers, onDone }) {
   const students = useAdminStore((s) => s.students);
   const upsertStudents = useAdminStore((s) => s.upsertStudents);
+  const updateCourse = useAdminStore((s) => s.updateCourse);
+  const initialTeachers = useMemo(() => new Set((course.teachers ?? []).map((t) => idOf(t))), [course]);
+  const [teacherIds, setTeacherIds] = useState(() => new Set(initialTeachers));
   const initial = useMemo(() => new Set(enrolled.map((s) => s._id)), [enrolled]);
   const [selected, setSelected] = useState(() => new Set(initial));
   const [saving, setSaving] = useState(false);
@@ -162,7 +176,8 @@ function RosterEditor({ course, enrolled, onDone }) {
 
   const toAdd = [...selected].filter((sid) => !initial.has(sid));
   const toRemove = [...initial].filter((sid) => !selected.has(sid));
-  const changes = toAdd.length + toRemove.length;
+  const teachersChanged = teacherIds.size !== initialTeachers.size || [...teacherIds].some((id) => !initialTeachers.has(id));
+  const changes = toAdd.length + toRemove.length + (teachersChanged ? 1 : 0);
 
   const toggle = (sid) =>
     setSelected((prev) => {
@@ -185,6 +200,10 @@ function RosterEditor({ course, enrolled, onDone }) {
         updated.push(data.Student);
       }
       upsertStudents(updated);
+      if (teachersChanged) {
+        const { data } = await api.put(`/courses/${course._id}/teachers`, { teacherIds: [...teacherIds] });
+        updateCourse(data.course);
+      }
       toast.success(`${course.courseName} roster updated`);
       onDone();
     } catch (err) {
@@ -208,6 +227,27 @@ function RosterEditor({ course, enrolled, onDone }) {
           <h2 className="text-[20px] font-bold">{course.courseName}</h2>
         </div>
         <div className="p-5 sm:p-6">
+          <p className="text-[13px] font-bold text-ink-soft mb-2">Teachers</p>
+          {teachers.length === 0 ? (
+            <p className="text-[13px] text-muted mb-5">No teacher accounts yet. Add one in Settings → Add staff.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2 mb-5">
+              {teachers.map((t) => {
+                const on = teacherIds.has(t._id);
+                return (
+                  <button key={t._id} type="button" aria-pressed={on}
+                    onClick={() => setTeacherIds((prev) => { const next = new Set(prev); if (next.has(t._id)) next.delete(t._id); else next.add(t._id); return next; })}
+                    className={cn("inline-flex items-center gap-2 h-10 pl-1.5 pr-4 rounded-2xl text-[14px] font-semibold transition-all",
+                      on ? "bg-brand-gradient text-white shadow-soft" : "bg-surface text-ink-soft border border-line hover:border-violet-200")}>
+                    <Avatar person={t} size="sm" className="w-7 h-7 text-[10px] rounded-xl ring-0" />
+                    {fullName(t)}
+                    {on && <Check size={14} strokeWidth={3} aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[13px] font-bold text-ink-soft mb-2">Students</p>
           {students.length === 0 ? (
             <p className="text-[14px] text-muted">Add students first.</p>
           ) : (

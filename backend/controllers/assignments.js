@@ -1,5 +1,6 @@
 const Course = require("../models/Courses")
 const Assignment = require("../models/Assignment")
+const { assertCourseAccess, courseScope } = require("../services/scope")
 const { HttpError, assertValidId, pick } = require("../utils/http")
 
 // CREATE ASSIGNMENT
@@ -15,6 +16,7 @@ async function handleNewAssignment(req, res) {
     if (!course) {
         throw new HttpError(404, "Course not found")
     }
+    await assertCourseAccess(req.user, CourseId)
 
     const assignment = await Assignment.create({
         title,
@@ -36,11 +38,15 @@ function isEnrolledIn(account, courseId) {
     return account.courses.some(c => c.course?.toString() === courseId.toString())
 }
 
-// GET ALL ASSIGNMENTS
+// GET ALL ASSIGNMENTS (admins: all, teachers: their courses, students: their enrolments)
 async function getAllAssignments(req, res) {
-    const filter = req.user.role === "admin"
-        ? {}
-        : { course: { $in: req.account.courses.map(c => c.course) } }
+    let filter = {}
+    if (req.user.role === "student") {
+        filter = { course: { $in: req.account.courses.map(c => c.course) } }
+    } else {
+        const scope = await courseScope(req.user)
+        if (scope) filter = { course: scope }
+    }
 
     const assignments = await Assignment.find(filter)
         .populate("course", "courseName")
@@ -53,8 +59,10 @@ async function getAllAssignments(req, res) {
 async function getAssignmentsByCourse(req, res) {
     const { courseId } = req.params
     assertValidId(courseId, "course id")
-    if (req.user.role !== "admin" && !isEnrolledIn(req.account, courseId)) {
-        throw new HttpError(403, "You are not enrolled in this course")
+    if (req.user.role === "student") {
+        if (!isEnrolledIn(req.account, courseId)) throw new HttpError(403, "You are not enrolled in this course")
+    } else {
+        await assertCourseAccess(req.user, courseId)
     }
 
     const assignments = await Assignment.find({ course: courseId }).sort({ dueDate: 1 })
@@ -67,15 +75,14 @@ async function updateAssignment(req, res) {
     const { id } = req.params
     assertValidId(id, "assignment id")
 
-    const updates = pick(req.body, ["title", "description", "dueDate"])
-    const assignment = await Assignment.findByIdAndUpdate(
-        id,
-        updates,
-        { returnDocument: "after", runValidators: true }
-    )
+    const assignment = await Assignment.findById(id)
     if (!assignment) {
         throw new HttpError(404, "Assignment not found")
     }
+    await assertCourseAccess(req.user, assignment.course)
+
+    Object.assign(assignment, pick(req.body, ["title", "description", "dueDate"]))
+    await assignment.save()
 
     return res.status(200).json({
         msg: "Assignment updated",
@@ -89,10 +96,12 @@ async function deleteAssignment(req, res) {
     const { id } = req.params
     assertValidId(id, "assignment id")
 
-    const assignment = await Assignment.findByIdAndDelete(id)
+    const assignment = await Assignment.findById(id)
     if (!assignment) {
         throw new HttpError(404, "Assignment not found")
     }
+    await assertCourseAccess(req.user, assignment.course)
+    await assignment.deleteOne()
 
     await Course.updateOne(
         { _id: assignment.course },

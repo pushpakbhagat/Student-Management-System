@@ -60,6 +60,9 @@ const useAdminStore = create((set, get) => ({
       courses: [...state.courses, course].sort((a, b) => a.courseName.localeCompare(b.courseName)),
     })),
 
+  updateCourse: (course) =>
+    set((state) => ({ courses: state.courses.map((c) => (c._id === course._id ? course : c)) })),
+
   // The server also un-enrolls students and deletes the course's assignments
   removeCourse: (id) =>
     set((state) => ({

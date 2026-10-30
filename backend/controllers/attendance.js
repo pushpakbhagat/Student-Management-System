@@ -3,6 +3,7 @@ const Student = require("../models/student")
 const AttendanceSession = require("../models/AttendanceSession")
 const { STATUSES } = require("../models/AttendanceSession")
 const { applyCounterChanges, parseDay } = require("../services/attendance")
+const { assertCourseAccess } = require("../services/scope")
 const { HttpError, assertValidId } = require("../utils/http")
 
 async function enrolledIds(courseId) {
@@ -35,6 +36,7 @@ function touchedStudents(...recordLists) {
 async function listSessions(req, res) {
     const { CourseId } = req.params
     assertValidId(CourseId, "course id")
+    await assertCourseAccess(req.user, CourseId)
     const sessions = await AttendanceSession.find({ course: CourseId }).sort({ date: -1 })
     return res.status(200).json({ sessions })
 }
@@ -43,6 +45,7 @@ async function createSession(req, res) {
     const { CourseId } = req.params
     assertValidId(CourseId, "course id")
     if (!await Course.exists({ _id: CourseId })) throw new HttpError(404, "Course not found")
+    await assertCourseAccess(req.user, CourseId)
 
     const date = parseDay(req.body?.date)
     if (!date) throw new HttpError(400, "Pick a valid date")
@@ -65,6 +68,7 @@ async function updateSession(req, res) {
     assertValidId(id, "session id")
     const session = await AttendanceSession.findById(id)
     if (!session) throw new HttpError(404, "Attendance record not found")
+    await assertCourseAccess(req.user, session.course)
 
     const before = session.records.map(r => ({ student: r.student, status: r.status }))
     const records = await cleanRecords(session.course, req.body?.records)
@@ -79,8 +83,10 @@ async function updateSession(req, res) {
 async function deleteSession(req, res) {
     const { id } = req.params
     assertValidId(id, "session id")
-    const session = await AttendanceSession.findByIdAndDelete(id)
+    const session = await AttendanceSession.findById(id)
     if (!session) throw new HttpError(404, "Attendance record not found")
+    await assertCourseAccess(req.user, session.course)
+    await session.deleteOne()
 
     await applyCounterChanges(session.course, session.records, [])
     return res.status(200).json({ msg: "Attendance record deleted", students: await touchedStudents(session.records) })

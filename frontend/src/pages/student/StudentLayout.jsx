@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { CalendarCheck, ClipboardList, GraduationCap, LayoutDashboard, Megaphone, Settings } from "lucide-react";
+import { CalendarCheck, ClipboardList, FileText, GraduationCap, LayoutDashboard, Megaphone, Settings } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import usePortalStore from "../../store/usePortalStore";
 import { TONES } from "../../lib/palette";
@@ -10,6 +10,7 @@ const NAV = [
   { to: "/student/grades", label: "Grades", icon: GraduationCap, tone: TONES.sky.chip },
   { to: "/student/assignments", label: "Assignments", icon: ClipboardList, tone: TONES.amber.chip },
   { to: "/student/announcements", label: "Announcements", icon: Megaphone, tone: TONES.teal.chip },
+  { to: "/student/report", label: "Report card", icon: FileText, tone: TONES.violet.chip },
   { to: "/student/settings", label: "Settings", icon: Settings, tone: TONES.pink.chip },
 ];
 

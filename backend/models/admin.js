@@ -1,6 +1,14 @@
 const mongoose = require("mongoose")
 
+// Staff accounts: full admins, and teachers who only manage the courses assigned to them
 const adminSchema = new mongoose.Schema({
+
+    // accounts created before teachers existed have no role and count as admins
+    role: {
+        type: String,
+        enum: ["admin", "teacher"],
+        default: "admin",
+    },
 
     firstName: {
         type: String,

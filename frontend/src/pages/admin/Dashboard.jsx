@@ -3,16 +3,20 @@ import { Link } from "react-router-dom";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { motion } from "motion/react";
-import { ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, PartyPopper, TrendingUp, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BarChart3, BookOpen, CalendarCheck, ClipboardList, GraduationCap, LineChart, PartyPopper, TrendingUp, UserPlus, Users } from "lucide-react";
 import { Card, CardHeader, EmptyState, StatCard } from "../../components/ui/Card";
 import { Badge, ProgressBar, Ring } from "../../components/ui/Feedback";
 import { InView, Reveal, Stagger } from "../../components/ui/Motion";
 import Avatar from "../../components/ui/Avatar";
 import Hero from "../../components/ui/Hero";
+import TrendChart from "../../components/charts/TrendChart";
+import BarChart from "../../components/charts/BarChart";
 import useAdminStore from "../../store/useAdminStore";
 import useSessionStore from "../../store/useSessionStore";
-import { attendanceOf, attendanceTone, daysUntil, dueLabel, formatDate, fullName, greeting, idOf } from "../../lib/format";
-import { STATUS, toneFor } from "../../lib/palette";
+import { attendanceOf, attendanceTone, daysUntil, dueLabel, formatDate, formatShortDate, fullName, greeting, idOf } from "../../lib/format";
+import { toneFor } from "../../lib/palette";
+import { useFetch } from "../../lib/useFetch";
+import { gradeTone } from "../../lib/grades";
 import { buttonClass } from "../../lib/buttonStyles";
 import { cn } from "../../lib/cn";
 
@@ -20,6 +24,10 @@ const linkClass = "inline-flex items-center gap-1 text-[13px] font-semibold text
 
 export default function Dashboard() {
   const user = useSessionStore((s) => s.user);
+  const isAdmin = useSessionStore((s) => s.role) === "admin";
+  const risk = useFetch("/insights/at-risk");
+  const stats = useFetch("/stats/overview");
+  const atRisk = risk.data?.students ?? [];
   const students = useAdminStore((s) => s.students);
   const courses = useAdminStore((s) => s.courses);
   const assignments = useAdminStore((s) => s.assignments);
@@ -44,8 +52,6 @@ export default function Dashboard() {
     }),
     [students]
   );
-  const tracked = withRates.filter((s) => s.hasClasses);
-  const atRisk = tracked.filter((s) => attendanceTone(s.rate) !== "good").sort((a, b) => a.rate - b.rate);
 
   const enrollment = useMemo(() => {
     const counts = courses.map((course) => ({
@@ -66,13 +72,19 @@ export default function Dashboard() {
   return (
     <>
       <Hero
-        eyebrow="Admin dashboard"
+        eyebrow={isAdmin ? "Admin dashboard" : "Teacher dashboard"}
         title={<>{greeting()}, {user?.firstName ?? "there"} <motion.span className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 18, -8, 18, 0] }} transition={{ duration: 1.4, delay: 0.6 }}>👋</motion.span></>}
         actions={
           <>
-            <Link to="/admin/students/new" className={buttonClass({ variant: "secondary", className: "border-white/0 text-violet-700 hover:text-fuchsia-700" })}>
-              <UserPlus size={17} aria-hidden="true" /> Add student
-            </Link>
+            {isAdmin ? (
+              <Link to="/admin/students/new" className={buttonClass({ variant: "secondary", className: "border-white/0 text-violet-700 hover:text-fuchsia-700" })}>
+                <UserPlus size={17} aria-hidden="true" /> Add student
+              </Link>
+            ) : (
+              <Link to="/admin/grades" className={buttonClass({ variant: "secondary", className: "border-white/0 text-violet-700 hover:text-fuchsia-700" })}>
+                <GraduationCap size={17} aria-hidden="true" /> Enter grades
+              </Link>
+            )}
             <Link to="/admin/attendance" className="inline-flex items-center gap-2 h-11 px-5 rounded-2xl font-semibold text-[14px] text-white bg-white/15 ring-1 ring-white/30 backdrop-blur hover:bg-white/25 transition-colors">
               <CalendarCheck size={17} aria-hidden="true" /> Take attendance
             </Link>
@@ -89,7 +101,7 @@ export default function Dashboard() {
       >
         {dueThisWeek > 0 ? `${dueThisWeek} assignment${dueThisWeek === 1 ? " is" : "s are"} due this week` : "No assignments due this week"}
         {" · "}
-        {atRisk.length > 0 ? `${atRisk.length} student${atRisk.length === 1 ? " needs" : "s need"} attention` : "everyone's attendance is on track"}.
+        {atRisk.length > 0 ? `${atRisk.length} student${atRisk.length === 1 ? " needs" : "s need"} attention` : "everyone is on track"}.
       </Hero>
 
       <Stagger className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6">
@@ -108,11 +120,40 @@ export default function Dashboard() {
         </Reveal>
       </Stagger>
 
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5 mb-5">
+        <InView className="xl:col-span-3">
+          <Card className="h-full pb-8">
+            <CardHeader title="Attendance trend" subtitle="Share of students in class, day by day" icon={LineChart} />
+            <div className="px-5 sm:px-6">
+              {stats.loading ? <div className="skeleton h-48" /> : (
+                <TrendChart data={(stats.data?.attendanceTrend ?? []).map((d) => ({ label: formatShortDate(`${d.date}T12:00:00Z`), value: d.pct }))} />
+              )}
+            </div>
+          </Card>
+        </InView>
+        <InView className="xl:col-span-2" delay={0.08}>
+          <Card className="h-full">
+            <CardHeader title="Grade distribution" subtitle="Every student's grade in every course" icon={BarChart3} />
+            <div className="px-5 sm:px-6 pb-6">
+              {stats.loading ? <div className="skeleton h-48" /> : (
+                <BarChart data={[
+                  { label: "A", hint: "90–100%", className: "bg-linear-to-t from-emerald-500 to-teal-400" },
+                  { label: "B", hint: "80–89%", className: "bg-linear-to-t from-sky-500 to-cyan-400" },
+                  { label: "C", hint: "70–79%", className: "bg-linear-to-t from-amber-500 to-yellow-400" },
+                  { label: "D", hint: "60–69%", className: "bg-linear-to-t from-orange-500 to-amber-400" },
+                  { label: "F", hint: "below 60%", className: "bg-linear-to-t from-rose-500 to-pink-400" },
+                ].map((g) => ({ ...g, value: stats.data?.gradeDistribution?.[g.label] ?? 0 }))} />
+              )}
+            </div>
+          </Card>
+        </InView>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-5 xl:grid-cols-3 gap-5 mb-5">
         <InView className="md:col-span-3 xl:col-span-2">
           <Card className="h-full">
-            <CardHeader title="Enrollment by course" subtitle="How many students take each course" icon={BookOpen}
-              action={<Link to="/admin/courses" className={linkClass}>Courses <ArrowUpRight size={15} /></Link>} />
+            <CardHeader title="Courses at a glance" subtitle="Students and average grade per course" icon={BookOpen}
+              action={isAdmin && <Link to="/admin/courses" className={linkClass}>Courses <ArrowUpRight size={15} /></Link>} />
             {enrollment.length === 0 ? (
               <EmptyState icon={BookOpen} title="No courses yet" className="py-10" />
             ) : (
@@ -126,7 +167,13 @@ export default function Dashboard() {
                           <span className={cn("w-2.5 h-2.5 rounded-full bg-linear-to-br flex-shrink-0", tone.gradient)} />
                           <span className="text-[14px] font-semibold text-ink truncate">{c.courseName}</span>
                         </span>
-                        <span className="text-[13px] font-bold text-ink-soft tabular-nums">{c.enrolled}</span>
+                        <span className="flex items-center gap-1.5">
+                          {(() => {
+                            const perf = stats.data?.coursePerformance.find((p) => p._id === c._id);
+                            return perf?.averageLetter ? <Badge tone={gradeTone(perf.averageLetter)} className="py-0.5">avg {perf.averageLetter}</Badge> : null;
+                          })()}
+                          <span className="text-[13px] font-bold text-ink-soft tabular-nums">{c.enrolled} students</span>
+                        </span>
                       </div>
                       <ProgressBar value={c.pct} tone={tone.name} label={`${c.courseName} enrollment`} />
                     </li>
@@ -217,22 +264,25 @@ export default function Dashboard() {
 
         <InView delay={0.16} className="md:col-span-2 xl:col-span-1">
           <Card className="h-full overflow-hidden">
-            <CardHeader title="Needs attention" subtitle="Attendance below 75%" icon={CalendarCheck}
-              action={<Link to="/admin/attendance" className={linkClass}>Attendance <ArrowUpRight size={15} /></Link>} />
-            {atRisk.length === 0 ? (
-              <EmptyState icon={PartyPopper} title="Everyone is on track" message={tracked.length ? "No one is below 75%." : "Record some classes to see this."} className="py-10" />
+            <CardHeader title="At-risk students" subtitle="Low attendance, failing grades or missed classes" icon={AlertTriangle} />
+            {risk.loading ? (
+              <div className="px-6 pb-6 flex flex-col gap-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-12" />)}</div>
+            ) : atRisk.length === 0 ? (
+              <EmptyState icon={PartyPopper} title="Everyone is on track" message="No one has low attendance or failing grades." className="py-10" />
             ) : (
-              <ul className="px-6 pb-6 pt-1 flex flex-col gap-4">
-                {atRisk.slice(0, 5).map((s) => (
-                  <li key={s._id} className="flex items-center gap-3">
-                    <Avatar person={s} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between gap-2 mb-1.5">
-                        <p className="text-[14px] font-semibold text-ink truncate">{fullName(s)}</p>
-                        <span className="text-[13px] font-bold tabular-nums" style={{ color: STATUS[attendanceTone(s.rate)].hex }}>{s.rate}%</span>
+              <ul className="px-3 pb-3">
+                {atRisk.slice(0, 5).map(({ student: s, level, reasons }) => (
+                  <li key={s._id}>
+                    <Link to={`/admin/students/${s._id}/report`} className="flex items-start gap-3 px-3 py-2.5 rounded-2xl hover:bg-violet-50/60 transition-colors">
+                      <Avatar person={s} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[14px] font-semibold text-ink truncate">{fullName(s)}</p>
+                          <Badge tone={level === "high" ? "bad" : "warn"}>{level === "high" ? "High risk" : "Watch"}</Badge>
+                        </div>
+                        <p className="text-[12px] text-muted mt-0.5 line-clamp-2">{reasons.join(" · ")}</p>
                       </div>
-                      <ProgressBar value={s.rate} tone={attendanceTone(s.rate)} label={`${fullName(s)} attendance`} />
-                    </div>
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -4,6 +4,7 @@ const Course = require("../models/Courses")
 const AttendanceSession = require("../models/AttendanceSession")
 const Assessment = require("../models/Assessment")
 const { hashPassword, normalizeEmail, isDemoAccount, CASE_INSENSITIVE } = require("../services/auth")
+const { courseScope, teacherCourseIds } = require("../services/scope")
 const { HttpError, assertValidId, pick, requireFields } = require("../utils/http")
 
 // The only fields a client may set on a student. Courses, marks and attendance
@@ -75,21 +76,29 @@ async function removeStudent(req, res) {
 }
 
 // ALL STUDENTS -------------------------------------------------------------------
+// Teachers get only the students in their courses
 async function handleGetAllStudents(req, res) {
-    const students = await Student.find({}).sort({ createdAt: -1 });
+    const scope = await courseScope(req.user)
+    const students = await Student.find(scope ? { "courses.course": scope } : {}).sort({ createdAt: -1 });
     return res.status(200).json(students);
 }
 
-// Admins can look up anyone; a student can only look up themselves
+// Admins can look up anyone, teachers their own students, students themselves
 async function getStudentByEmail(req, res) {
     const email = normalizeEmail(req.params.email)
-    if (req.user.role !== "admin" && normalizeEmail(req.user.email) !== email) {
+    if (req.user.role === "student" && normalizeEmail(req.user.email) !== email) {
         throw new HttpError(403, "You can only view your own profile")
     }
 
     const student = await Student.findOne({ email }).collation(CASE_INSENSITIVE);
     if (!student) {
         throw new HttpError(404, "Student not found")
+    }
+    if (req.user.role === "teacher") {
+        const mine = (await teacherCourseIds(req.user.id)).map(String)
+        if (!student.courses.some(c => mine.includes(String(c.course)))) {
+            throw new HttpError(403, "This student isn't in any of your courses")
+        }
     }
     return res.status(200).json(student);
 }

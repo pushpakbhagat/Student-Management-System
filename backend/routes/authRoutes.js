@@ -1,7 +1,7 @@
 const express = require("express")
 const rateLimit = require("express-rate-limit")
-const { handleLogin, handleDemoLogin, handleLogout, checkAuth, getMe, changePassword, updateMyPhoto, getSetupStatus, handleNewAdmin } = require("../controllers/auth")
-const { requireAuth } = require("../middlewares/auth")
+const { handleLogin, handleDemoLogin, handleLogout, checkAuth, getMe, changePassword, updateMyPhoto, getSetupStatus, handleNewAdmin, listStaff } = require("../controllers/auth")
+const { requireAuth, requireAdmin } = require("../middlewares/auth")
 
 const router = express.Router()
 
@@ -24,5 +24,6 @@ router.get("/me", requireAuth, getMe)
 router.patch("/me/password", loginLimiter, requireAuth, changePassword)
 router.get("/setup-status", getSetupStatus)
 router.post("/admins", handleNewAdmin)
+router.get("/staff", requireAdmin, listStaff)
 
 module.exports = router

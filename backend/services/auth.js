@@ -8,13 +8,20 @@ const { HttpError } = require("../utils/http")
 const COOKIE_NAME = "token"
 const SALT_ROUNDS = 10
 const MIN_PASSWORD_LENGTH = 8
-const MODEL_FOR_ROLE = { student: Student, admin: Admin }
+// admins and teachers are both staff accounts (Admin model, told apart by `role`)
+const MODEL_FOR_ROLE = { student: Student, admin: Admin, teacher: Admin }
 
 // Emails are stored lowercase; this collation also matches older mixed-case records
 const CASE_INSENSITIVE = { locale: "en", strength: 2 }
 
 function modelForRole(role) {
     return Object.hasOwn(MODEL_FOR_ROLE, role) ? MODEL_FOR_ROLE[role] : null
+}
+
+// e.g. a teacher can't sign in through the "admin" door, and vice versa
+function accountHasRole(account, role) {
+    if (role === "student") return account instanceof Student
+    return account instanceof Admin && (account.role ?? "admin") === role
 }
 
 function normalizeEmail(email) {
@@ -62,7 +69,7 @@ async function findAccountForToken(token) {
     if (!Model) return null
 
     const account = await Model.findById(payload.id)
-    if (!account) return null
+    if (!account || !accountHasRole(account, payload.role)) return null
     const issuedAt = payload.issuedAt ?? payload.iat * 1000
     if (account.passwordChangedAt && issuedAt < account.passwordChangedAt.getTime()) return null
 
@@ -104,6 +111,7 @@ module.exports = {
     COOKIE_NAME,
     CASE_INSENSITIVE,
     modelForRole,
+    accountHasRole,
     normalizeEmail,
     findByEmail,
     isDemoAccount,

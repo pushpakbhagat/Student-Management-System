@@ -12,6 +12,7 @@ import { ErrorState } from "../ui/Feedback";
 import { PageSkeleton } from "../ui/Skeleton";
 import CommandPalette from "../CommandPalette";
 import ThemeToggle from "../ThemeToggle";
+import NotificationBell from "../NotificationBell";
 import BackgroundDecor from "./BackgroundDecor";
 
 const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -64,7 +65,7 @@ export default function AppShell({ nav, portalName, status = "ready", onRetry })
       <BackgroundDecor />
 
       {/* Desktop: floating sidebar */}
-      <aside className="hidden lg:flex fixed top-4 bottom-4 left-4 w-[264px] z-30 rounded-[28px] glass shadow-soft">
+      <aside className="hidden lg:flex print:hidden fixed top-4 bottom-4 left-4 w-[264px] z-30 rounded-[28px] glass shadow-soft">
         <LayoutGroup id="desktop-nav">
           <SidebarContent nav={nav} portalName={portalName} />
         </LayoutGroup>
@@ -107,9 +108,9 @@ export default function AppShell({ nav, portalName, status = "ready", onRetry })
         {paletteOpen && <CommandPalette nav={nav} onClose={() => setPaletteOpen(false)} />}
       </AnimatePresence>
 
-      <div className="lg:pl-[288px] min-w-0">
+      <div className="lg:pl-[288px] print:pl-0 min-w-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 px-4 sm:px-6 lg:px-8 pt-3 lg:pt-4 pb-2 bg-linear-to-b from-canvas via-canvas/90 to-transparent">
+        <header className="print:hidden sticky top-0 z-20 px-4 sm:px-6 lg:px-8 pt-3 lg:pt-4 pb-2 bg-linear-to-b from-canvas via-canvas/90 to-transparent">
           <div className="h-14 flex items-center gap-3 px-3 sm:px-4 rounded-2xl glass shadow-soft">
             <button
               onClick={() => setMenuOpen(true)}
@@ -139,13 +140,14 @@ export default function AppShell({ nav, portalName, status = "ready", onRetry })
               >
                 <Search size={18} />
               </button>
+              <NotificationBell />
               <ThemeToggle />
               <UserChip className="ml-1" />
             </div>
           </div>
         </header>
 
-        <main className="px-4 sm:px-6 lg:px-8 pt-7 sm:pt-9 pb-[max(2.5rem,env(safe-area-inset-bottom))] max-w-[1400px] mx-auto">
+        <main className="print:p-0 px-4 sm:px-6 lg:px-8 pt-7 sm:pt-9 pb-[max(2.5rem,env(safe-area-inset-bottom))] max-w-[1400px] mx-auto">
           {status === "error" ? (
             <ErrorState message="We couldn't load your data." onRetry={onRetry} />
           ) : status !== "ready" ? (
