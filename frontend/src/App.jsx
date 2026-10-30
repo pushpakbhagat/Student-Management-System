@@ -1,88 +1,70 @@
-import React, { useState, useEffect } from 'react'
-import axios from 'axios'
-import {Route, Routes} from 'react-router-dom'
-import Admin from './pages/Admin'
-import Student from './pages/Student'
-import Attendance from './pages/admin/Attendance'
-import Dashboard from './pages/admin/Dashboard'
-import StudentInfo from './pages/admin/StudentInfo'
-import AdminWelcome from './components/adminComponents/AdminWelcome'
-import StudentInfoPage from './components/adminComponents/StudentInfoPage'
-import AddStudent from './pages/admin/StudentInfo/AddStudent'
-import StudentList from './pages/admin/StudentInfo/StudentList'
-import StudentShowCard from './pages/admin/StudentInfo/StudentShowCard'
-import Login from './pages/Login'
-import api from "./api";
-import useStudentStore from "./store/useStudentStore";
-import { useNavigate } from 'react-router-dom'
-import Assignments from "./pages/studentPages/Assignments"
-import StudentAttendance from './pages/studentPages/StudentAttendance'
-import StudentDashboard from './pages/studentPages/StudentDashboard'
-import StudentWelcome from './pages/studentPages/StudentWelcome'
-import PatchStudent from './pages/admin/StudentInfo/PatchStudent'
-import About from './pages/admin/About'
-import Courses from './pages/admin/Courses'
-import AdminAssignments from './pages/admin/Assignments'
-import Settings from './pages/studentPages/Settings'
-import Register from './pages/Register'
+import { lazy, Suspense, useEffect } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { GuestOnly, RequireRole } from "./components/RouteGuards";
+import { FullPageLoader } from "./components/ui/Feedback";
+import useSessionStore from "./store/useSessionStore";
+import { startSmoothScroll } from "./lib/smoothScroll";
+import Login from "./pages/Login";
 
+// Each area is its own bundle, so students never download admin code (and vice versa)
+const Register = lazy(() => import("./pages/Register"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const StudentsPage = lazy(() => import("./pages/admin/students/StudentsPage"));
+const StudentFormPage = lazy(() => import("./pages/admin/students/StudentFormPage"));
+const Courses = lazy(() => import("./pages/admin/Courses"));
+const Attendance = lazy(() => import("./pages/admin/Attendance"));
+const AdminAssignments = lazy(() => import("./pages/admin/Assignments"));
+const About = lazy(() => import("./pages/admin/About"));
+const Account = lazy(() => import("./pages/admin/Account"));
 
-function App() {
-  const logout = useStudentStore((state) => state.logout);
-  const navigate = useNavigate();
+const StudentLayout = lazy(() => import("./pages/student/StudentLayout"));
+const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
+const StudentAttendance = lazy(() => import("./pages/student/StudentAttendance"));
+const StudentAssignments = lazy(() => import("./pages/student/StudentAssignments"));
+const StudentSettings = lazy(() => import("./pages/student/StudentSettings"));
 
+export default function App() {
+  const restore = useSessionStore((s) => s.restore);
+
+  // Ask the server who we are (the login cookie is httpOnly, so JS can't read it)
   useEffect(() => {
-    const verifyUser = async () => {
-      try {
-        await api.get("/check-auth");
-      } catch (error) {
-        if (error.response?.status === 401) {
-          logout();
-          navigate("/");
-        }
-      }
-    };
+    restore();
+  }, [restore]);
 
-    verifyUser();
-  }, []);
+  useEffect(() => startSmoothScroll(), []);
 
   return (
-    <div>
-       <div>
-         
-          <Routes>
-            <Route path='/' element={<Login/>} />
-            <Route path='/register' element={<Register/>} />
-            <Route path='/student' element={<Student/>} >
-            <Route index element={<StudentWelcome/>}/>
-            <Route path='studentDashboard' element={<StudentDashboard/>}/>
-            <Route path='assignment' element={<Assignments/>}/>
-            <Route path='studentattendance' element= {<StudentAttendance/>}/>
-            <Route path ='settings' element = {<Settings/>}/>
-            </Route>
+    <Suspense fallback={<FullPageLoader />}>
+      <Routes>
+        <Route path="/" element={<GuestOnly><Login /></GuestOnly>} />
+        <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
 
-            <Route path='/admin' element={<Admin/>}>
-                    <Route index element={<AdminWelcome />} />
-                    <Route path='dashboard' element={<Dashboard/>}/>
-                    <Route path='attendance' element={<Attendance/>}/>
-                    <Route path='courses' element={<Courses/>}/>
-                    <Route path='assignments' element={<AdminAssignments/>}/>
-                    <Route path='about' element={<About/>}/>
-                    
-                    <Route path='studentinfo' element={<StudentInfo/>}>
-                    <Route index element={<StudentInfoPage/>}/>
-                    <Route path='add' element={<AddStudent/>}/>
-                    <Route path='editStudent' element={<PatchStudent/>}/>
-                    <Route path='showlist' element={<StudentList/>}/>
-                    <Route path='showcard' element={<StudentShowCard/>}/>
-                    </Route>
-            </Route>
-          </Routes>
-        </div>
-    </div>
+        <Route path="/admin" element={<RequireRole role="admin"><AdminLayout /></RequireRole>}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="students" element={<StudentsPage />} />
+          <Route path="students/new" element={<StudentFormPage />} />
+          <Route path="students/:id/edit" element={<StudentFormPage />} />
+          <Route path="courses" element={<Courses />} />
+          <Route path="attendance" element={<Attendance />} />
+          <Route path="assignments" element={<AdminAssignments />} />
+          <Route path="account" element={<Account />} />
+          <Route path="about" element={<About />} />
+        </Route>
+
+        <Route path="/student" element={<RequireRole role="student"><StudentLayout /></RequireRole>}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<StudentDashboard />} />
+          <Route path="attendance" element={<StudentAttendance />} />
+          <Route path="assignments" element={<StudentAssignments />} />
+          <Route path="settings" element={<StudentSettings />} />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
-
 }
-
-export default App;

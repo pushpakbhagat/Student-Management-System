@@ -1,43 +1,32 @@
-const express = require("express")
-const dotenv = require("dotenv")        // ADD THIS
-dotenv.config()                          // ADD THIS
-const PORT = process.env.PORT || 8004   // CHANGE THIS
-const app = express()
-const fs = require("fs")
-const {createLogs} = require("./middlewares/log")
-const  mongoose = require("mongoose")
-const studentRouter = require("./routes/studentRoutes")
-const courseRouter = require("./routes/courseRoutes")
-const assignmentRouter = require("./routes/assignmentRoutes")
-const cors = require("cors");
-const cookieParser = require("cookie-parser");
+const mongoose = require("mongoose")
+const env = require("./config/env")
+const app = require("./app")
 
+async function start() {
+    env.assertRequiredEnv()
 
+    // Connect first, so the API never accepts requests it can't serve
+    await mongoose.connect(env.mongoUri)
+    console.log("MongoDB connected")
 
-// Middleware--------------------------------------
-   app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://student-managment-system-by-pushpak.netlify.app'
-  ],
-  credentials: true
-}));
-    app.use(createLogs("log.txt"));
-    app.use(express.urlencoded({ extended: true }));
-    app.use(express.json());
-    app.use(cookieParser())
+    const server = app.listen(env.port, () => {
+        console.log(`Student Management System API running on port ${env.port} (${env.nodeEnv})`)
+    })
 
-// CONNECTION ------------------------
-    mongoose.connect(process.env.MONGO_URI)   // CHANGE THIS
-        .then(() => {console.log("MongoDB connected")})
-        .catch(err => console.log(err))
-            
-// ROUTES -----------------------------
-   app.use('/', studentRouter)
-   app.use('/', courseRouter)
-   app.use('/', assignmentRouter)
+    // Hosts send SIGTERM before restarting/redeploying: finish open requests, then exit
+    const shutdown = (signal) => {
+        console.log(`${signal} received, shutting down`)
+        server.close(async () => {
+            await mongoose.disconnect()
+            process.exit(0)
+        })
+        setTimeout(() => process.exit(1), 10000).unref()
+    }
+    process.on("SIGTERM", shutdown)
+    process.on("SIGINT", shutdown)
+}
 
-
-// SERVER -------------------------------------------------------
-    app.listen(PORT, ()=> {console.log("Server started @ : ", PORT)})
-    console.log("welcome to student management system")
+start().catch(err => {
+    console.error("Failed to start server:", err.message)
+    process.exit(1)
+})

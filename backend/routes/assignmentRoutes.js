@@ -7,13 +7,14 @@ const {
     updateAssignment,
     deleteAssignment
 } = require("../controllers/assignments")
+const { requireAuth, requireAdmin } = require("../middlewares/auth")
 
 
-router.post('/assignments', handleNewAssignment);
-router.get("/assignments", getAllAssignments)
-router.get("/assignments/course/:courseId", getAssignmentsByCourse)
-router.patch("/assignments/:id", updateAssignment)
-router.delete("/assignments", deleteAssignment)
+router.get("/assignments", requireAuth, getAllAssignments)
+router.get("/assignments/course/:courseId", requireAuth, getAssignmentsByCourse)
+router.post('/assignments', requireAdmin, handleNewAssignment);
+router.patch("/assignments/:id", requireAdmin, updateAssignment)
+router.delete("/assignments/:id", requireAdmin, deleteAssignment)
 
 
 module.exports = router;

@@ -1,32 +1,34 @@
-const { verifyToken } = require("../services/auth");
+const { findAccountForToken, clearAuthCookie, COOKIE_NAME } = require("../services/auth")
 
-function restrictToLoggedinUserOnly(req, res, next) {
-  console.log("authentication middleware triggered");
-
-  const token = req.cookies?.token;
-  console.log("token:", token);
-
-  if (!token) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-
-  try {
-    const user = verifyToken(token);
-    console.log("decoded user:", user);
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid token" });
+async function requireAuth(req, res, next) {
+    const session = await findAccountForToken(req.cookies?.[COOKIE_NAME])
+    if (!session) {
+        clearAuthCookie(res)
+        return res.status(401).json({ msg: "Not authenticated" })
     }
-
-    req.user = user;   // attach user to request
-    next();
-
-  } catch (error) {
-    console.log("JWT error:", error.message);
-    return res.status(401).json({ message: "Invalid or expired token" });
-  }
+    const { account, role } = session
+    req.user = { id: account._id.toString(), email: account.email, role }   // who is calling
+    req.account = account                                                   // their fresh database record
+    next()
 }
 
+// Usage: router.get("/path", requireRole("admin"), handler)
+function requireRole(...roles) {
+    return [
+        requireAuth,
+        (req, res, next) => {
+            if (!roles.includes(req.user.role)) {
+                return res.status(403).json({ msg: "You are not allowed to do this" })
+            }
+            next()
+        },
+    ]
+}
+
+const requireAdmin = requireRole("admin")
+
 module.exports = {
-  restrictToLoggedinUserOnly
-};
+    requireAuth,
+    requireRole,
+    requireAdmin,
+}

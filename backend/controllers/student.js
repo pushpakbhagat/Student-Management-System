@@ -1,254 +1,89 @@
 
 const Student = require("../models/student");
-const Admin = require("../models/admin")
 const Course = require("../models/Courses")
-const Assignment = require("../models/Assignment")
-const {generateToken,verifyToken} = require("../services/auth")
-const bcrypt = require("bcrypt");
-// NEW STUDENTS--------------------------------------------------------------
+const { hashPassword, normalizeEmail, CASE_INSENSITIVE } = require("../services/auth")
+const { HttpError, assertValidId, pick, requireFields } = require("../utils/http")
 
-async function testpatchStudent(req,res){
-  const body = req.body
-  const email = req.params.email
+// The only fields a client may set on a student. Courses, marks and attendance
+// go through the course endpoints instead.
+const STUDENT_FIELDS = ["firstName", "lastName", "gender", "email", "password", "imgURL"]
 
-   if(body.password){
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(body.password, saltRounds) 
-    body.password = hashedPassword
-  }
+// NEW STUDENT --------------------------------------------------------------------
+async function handleNewStudent(req, res) {
+    const body = pick(req.body, STUDENT_FIELDS)
+    requireFields(body, ["firstName", "lastName", "gender", "email", "password"])
+    body.email = normalizeEmail(body.email)
+    body.password = await hashPassword(body.password)
 
-  const oldStudent = await Student.findOneAndUpdate({email: email},body,{new: true})
-  if (!oldStudent) {
-  return res.status(404).json({ msg: "Student not found" });
-}
-  const {password : pwd, ...safeStudent } = oldStudent.toObject()
-  console.log("safeStudent: ",safeStudent)
-  return res.status(200).json(safeStudent)
-}
-
-
-async function patchStudent(req,res) {
-    const email = req.params.email
-    const updatedbody = {...req.body}
-
-    if(updatedbody.password){
-    const saltRounds = 10;
-    updatedbody.password = await bcrypt.hash(updatedbody.password,saltRounds);
-
-    try{
-      const newStudent = await Student.findOneAndUpdate(
-      {email: email},
-      {body},
-      {new : true}
-    )
-    
-    const {password: pwd, ...safeStudent } = newStudent.toObject()
-    return res.status(201).json(safeStudent)
-    }catch(error){
-      return res.status(500).json({ msg: error.message });
-    }
-    }
-
-
-try{
-      const newStudent = await Student.findOneAndUpdate(
-      {email},
-      {body},
-      {new : true}
-    )
-    
-    
+    const newStudent = await Student.create(body)
     return res.status(201).json(newStudent)
-}catch(error){
-    return res.status(500).json({ msg: error.message });
-}
-   
 }
 
-async function handleNewStudent (req,res) {
-    const body = req.body
-
-    
-    try{
-      if (
-        !body ||
-        !body.firstName ||
-        !body.lastName ||
-        !body.gender ||
-        !body.email ||
-        !body.password 
-    ){
-        console.log("all fields are required")
-        return res.status(400).json({msg: "All fields are required"})
+// UPDATE STUDENT -----------------------------------------------------------------
+async function updateStudent(req, res) {
+    const updates = pick(req.body, STUDENT_FIELDS)
+    if (Object.keys(updates).length === 0) {
+        throw new HttpError(400, "Nothing to update")
     }
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(body.password,saltRounds);
-
-        const newStudent = await Student.create({
-        firstName: body.firstName,
-        lastName: body.lastName,
-        gender: body.gender,
-        email: body.email,
-        password: hashedPassword,
-        imgURL: body.imgURL,
-        courses: body.courses,
-        attendance: body.attendance,
-
-    });
-      const {password: pwd, ...safeStudent } = newStudent.toObject()
-      return res.status(201).json(safeStudent)
-    
-    }catch(err) {
-      return res.status(500).json({ msg: err.message });
+    if (updates.email !== undefined) {
+        updates.email = normalizeEmail(updates.email)
     }
-    
-}
-
-async function handleNewAdmin (req,res) {
-    const body = req.body
-
-    if (
-        !body ||
-        !body.firstName ||
-        !body.lastName ||
-        !body.gender ||
-        !body.email ||
-        !body.password
-    ){
-        return res.status(400).json({msg: "All fields are required"})
+    if (updates.password !== undefined) {
+        updates.password = await hashPassword(updates.password)
+        updates.passwordChangedAt = new Date()   // logs the student out everywhere
     }
-    try{
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(body.password, saltRounds)
-      const newAdmin = await Admin.create({
-        firstName: body.firstName,
-        lastName: body.lastName,
-        gender: body.gender,
-        email: body.email,
-        password: hashedPassword,
-        imgURL: body.imgURL,
 
-    });
-    const {password : pwd, ...safeAdmin} = newAdmin.toObject()
-    return res.status(201).json(safeAdmin)
-
-    }catch(err){
-      return res.status(500).json({ msg: "either the email is taken or fill all inputs" });
-    }
-    
-        
-}
-// DELETE STUDENT ----------------------------------------------------------------
-async function removeStudent (req,res) {
-    try {
-    const student = await Student.findByIdAndDelete(req.params.id);
-
+    const student = await Student.findOneAndUpdate(
+        { email: normalizeEmail(req.params.email) },
+        updates,
+        { returnDocument: "after", runValidators: true, collation: CASE_INSENSITIVE }
+    )
     if (!student) {
-      return res.status(404).json({ msg: "Student not found" });
+        throw new HttpError(404, "Student not found")
     }
-
-    return res.json({ status: "deleted", Student });
-  } catch (err) {
-    return res.status(400).json({ error: "Invalid ID" });
-  }
+    return res.status(200).json(student)
 }
 
-// ALL STUDENTS ----------------------------------------------------------------------
+// DELETE STUDENT -----------------------------------------------------------------
+async function removeStudent(req, res) {
+    const { id } = req.params
+    assertValidId(id, "student id")
+
+    const student = await Student.findByIdAndDelete(id);
+    if (!student) {
+        throw new HttpError(404, "Student not found")
+    }
+
+    // remove the student from every course roster too
+    await Course.updateMany({ students: id }, { $pull: { students: id } })
+
+    return res.status(200).json({ status: "deleted", student });
+}
+
+// ALL STUDENTS -------------------------------------------------------------------
 async function handleGetAllStudents(req, res) {
-    const student = await Student.find({});
-    return res.json(student);
-    
-    }
-
-async function getStudentByEmail(req, res) {
-  try {
-      // get email from URL
-    const student = await Student.findOne({ email: req.params.email});
-
-    if (!student) {
-      return res.status(404).json({ msg: "Student not found" });
-    }
-
-    return res.status(200).json(student);
-
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+    const students = await Student.find({}).sort({ createdAt: -1 });
+    return res.status(200).json(students);
 }
 
-async function handleLogin(req,res) {
-  console.log("handlelogin is working ------------------------------------------")
-    const {email, password, role}= req.body
-  if(role === "student"){
+// Admins can look up anyone; a student can only look up themselves
+async function getStudentByEmail(req, res) {
+    const email = normalizeEmail(req.params.email)
+    if (req.user.role !== "admin" && normalizeEmail(req.user.email) !== email) {
+        throw new HttpError(403, "You can only view your own profile")
+    }
 
-        const student = await Student.findOne({ email });
-        if (!student) {
-        return res.status(404).json({ msg: "Student not found" });
-      }
-      const isMatch = await bcrypt.compare(password, student.password);
-      console.log("is match: ", isMatch)
-      console.log("password: ", password)
-      console.log("admin: ", student.password)    
-      if (!isMatch) {
-        return res.status(401).json({ msg: "Wrong password" });
-      }
-        //create jwt 
-      const token = generateToken(student,role);
-      console.log(token)
-    // send this token to browser
-      res.cookie("token", token,{
-        httpOnly: true,
-        secure: false,   
-        sameSite: "lax",
-      });
-      const {password  : pwd, ...safeStudent } = student.toObject()
-      console.log("safeStudent: ",safeStudent)
-      return res.status(200).json({student: safeStudent})
-      
-  }
-  
-  if(role === "admin") {
-    const admin = await Admin.findOne({ email });
-  if (!admin) {
-    return res.status(404).json({ msg: "Admin not found" });
-  }
-  const isMatch = await bcrypt.compare(password, admin.password);
-  console.log("password: ", password)
-  console.log("admin: ", admin.password)
-      if (!isMatch) {
-        return res.status(401).json({ msg: "Wrong password" });
-      }
-    //create jwt 
-   const token = generateToken(admin,role);
-
- // send this token to browser
-    res.cookie("token", token,{
-        httpOnly: true,
-        secure: false,   
-        sameSite: "lax",
-      });
-    const allCourses = await Course.find({})
-    const allStudent = await Student.find({});
-    const allAssignments = await Assignment.find({})
-    const safeStudents = allStudent.map(student => {
-    const { password : pwd, ...s } = student.toObject();
-    return s;
-  }); 
-  const {password : pwd, ...safeAdmin } = admin.toObject()
-    return res.status(200).json({Data: {admin:safeAdmin,StudentData: safeStudents, courseData: allCourses , assignmentData : allAssignments}})
-  }
-  
-  }
-
-
+    const student = await Student.findOne({ email }).collation(CASE_INSENSITIVE);
+    if (!student) {
+        throw new HttpError(404, "Student not found")
+    }
+    return res.status(200).json(student);
+}
 
 module.exports = {
-    handleNewStudent, 
+    handleNewStudent,
+    updateStudent,
     removeStudent,
     handleGetAllStudents,
     getStudentByEmail,
-    handleLogin,
-    handleNewAdmin,
-    patchStudent,
-    testpatchStudent,
 }

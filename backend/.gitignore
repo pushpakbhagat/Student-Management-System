@@ -1,3 +1,5 @@
 .env
 node_modules
 log.txt
+.local-db
+*.log

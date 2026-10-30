@@ -1,206 +1,254 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "motion/react";
+import { toast } from "sonner";
+import { BookOpen, CalendarCheck, Check, CheckCheck, X } from "lucide-react";
+import api, { getErrorMessage } from "../../api";
+import Avatar from "../../components/ui/Avatar";
+import Button from "../../components/ui/Button";
+import { Card, EmptyState, PageHeader } from "../../components/ui/Card";
+import { Badge, ProgressBar } from "../../components/ui/Feedback";
+import { Input } from "../../components/ui/Form";
+import { Reveal, Stagger } from "../../components/ui/Motion";
+import useAdminStore from "../../store/useAdminStore";
+import { attendanceTone, fullName, idOf, percent } from "../../lib/format";
+import { toneFor } from "../../lib/palette";
+import { cn } from "../../lib/cn";
 
+export default function Attendance() {
+  const courses = useAdminStore((s) => s.courses);
+  const students = useAdminStore((s) => s.students);
+  const upsertStudent = useAdminStore((s) => s.upsertStudent);
 
-import React, { useState } from "react";
-import api from '../../api'
-import useStudentStore from "../../store/useStudentStore";
- 
-const Attendance = () => {
-  const courses = useStudentStore((state) => state.courses);
-  const students = useStudentStore((state) => state.students);
-  const editStudent = useStudentStore((state) => state.editStudent);
- 
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [attendanceState, setAttendanceState] = useState({});
-  const [marksState, setMarksState] = useState({});
- 
-  if (!courses || !students) return null;
- 
-  const handleAttendanceChange = (studentId, value) => {
-    setAttendanceState((prev) => ({ ...prev, [studentId]: value }));
-  };
- 
-  const handleMarksChange = (studentId, value) => {
-    setMarksState((prev) => ({ ...prev, [studentId]: value }));
-  };
- 
-  const submitAttendance = async (studentId) => {
-    if (!selectedCourse) { alert("Select a course first"); return; }
-    try {
-      const ifPresent = attendanceState[studentId] === "present";
-      const res = await api.patch("/courses/attendance", {
-        CourseId: selectedCourse, StudentId: studentId, ifPresent,
-      });
-      editStudent(res.data.student);
-      alert("Attendance Updated");
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Error updating attendance");
-    }
-  };
- 
-  const submitMarks = async (studentId) => {
-    if (!selectedCourse) { alert("Select a course first"); return; }
-    try {
-      const res = await api.patch("/courses/marks", {
-        StudentId: studentId, CourseId: selectedCourse, Marks: marksState[studentId],
-      });
-      editStudent(res.data.Student);
-      alert("Marks Updated");
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Error updating marks");
-    }
-  };
- 
-  const filteredStudents = students.filter((student) =>
-    student.courses?.some((course) => course.course.toString() === selectedCourse)
+  const [courseId, setCourseId] = useState(() => courses[0]?._id ?? null);
+  const [marked, setMarked] = useState({});   // studentId -> "present" | "absent"
+  const [marks, setMarks] = useState({});     // studentId -> string from the input
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [savingMarksFor, setSavingMarksFor] = useState(null);
+
+  const roster = useMemo(
+    () => students
+      .map((s) => ({ student: s, enrollment: s.courses?.find((e) => idOf(e.course) === courseId) }))
+      .filter((row) => row.enrollment),
+    [students, courseId]
   );
- 
+
+  const markedCount = roster.filter(({ student }) => marked[student._id]).length;
+  const presentCount = roster.filter(({ student }) => marked[student._id] === "present").length;
+  const activeTone = toneFor(courseId);
+
+  const selectCourse = (id) => {
+    setCourseId(id);
+    setMarked({});
+    setMarks({});
+  };
+
+  const markEveryone = (value) =>
+    setMarked(Object.fromEntries(roster.map(({ student }) => [student._id, value])));
+
+  const toggle = (sid, value) => setMarked((m) => ({ ...m, [sid]: m[sid] === value ? undefined : value }));
+
+  // Records one class for every student that has been marked present or absent
+  const saveAttendance = async () => {
+    const entries = Object.entries(marked).filter(([sid, v]) => v && roster.some((r) => r.student._id === sid));
+    setSavingAttendance(true);
+    const results = await Promise.allSettled(
+      entries.map(([sid, value]) =>
+        api.patch("/courses/attendance", { CourseId: courseId, StudentId: sid, ifPresent: value === "present" })
+      )
+    );
+    results.forEach((r) => r.status === "fulfilled" && upsertStudent(r.value.data.student));
+
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length) {
+      toast.error(`${failed.length} record(s) couldn't be saved: ${getErrorMessage(failed[0].reason)}`);
+    } else {
+      toast.success(`Attendance saved for ${entries.length} student${entries.length === 1 ? "" : "s"} 🎉`);
+      setMarked({});
+    }
+    setSavingAttendance(false);
+  };
+
+  const saveMarks = async (sid) => {
+    setSavingMarksFor(sid);
+    try {
+      const { data } = await api.patch("/courses/marks", { CourseId: courseId, StudentId: sid, Marks: marks[sid] });
+      upsertStudent(data.Student);
+      setMarks((m) => ({ ...m, [sid]: undefined }));
+      toast.success("Marks saved");
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSavingMarksFor(null);
+    }
+  };
+
+  if (courses.length === 0) {
+    return (
+      <>
+        <PageHeader eyebrow="Manage" title="Attendance & Marks" />
+        <Card>
+          <EmptyState icon={BookOpen} title="No courses yet" message="Create a course and enroll students first."
+            action={<Link to="/admin/courses" className="font-semibold text-violet-600">Go to courses</Link>} />
+        </Card>
+      </>
+    );
+  }
+
   return (
-    <div className="p-6 w-full h-full">
- 
-      {/* Header */}
-      <div className="mb-6">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500 font-semibold mb-1">Manage</p>
-        <h1 className="text-2xl font-semibold text-white tracking-tight">Attendance & Marks</h1>
-      </div>
- 
-      {/* Course pills */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        <p className="w-full text-[11px] uppercase tracking-widest text-slate-600 font-semibold mb-1">Select course</p>
-        {courses.map((course) => (
-          <button
-            key={course._id}
-            onClick={() => setSelectedCourse(course._id)}
-            className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all border
-              ${selectedCourse === course._id
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-[#13161e] text-slate-400 border-white/5 hover:border-white/10 hover:text-slate-200"
-              }`}
-          >
-            {course.courseName}
-          </button>
-        ))}
-      </div>
- 
-      {/* Students table */}
-      {!selectedCourse && (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-600">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="mb-3 opacity-40">
-            <path d="M12 3L1 9l4 2.18V15c0 3 3.58 5 7 5s7-2 7-5v-3.82L23 9zm0 12.35c-2.5 0-5-1.04-5-2.35v-1.18l5 2.28 5-2.28V13c0 1.31-2.5 2.35-5 2.35z"/>
-          </svg>
-          <p className="text-sm">Select a course to view students</p>
-        </div>
-      )}
- 
-      {selectedCourse && filteredStudents.length === 0 && (
-        <div className="flex items-center justify-center py-20 text-slate-600 text-sm">
-          No students enrolled in this course.
-        </div>
-      )}
- 
-      <div className="flex flex-col gap-3">
-        {filteredStudents.map((student) => {
-          const matchedCourse = student.courses.find(
-            (c) => c.course.toString() === selectedCourse
-          );
-          const attended = matchedCourse.attendedClasses;
-          const total = matchedCourse.totalClasses;
-          const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
-          const pctColor = pct >= 75 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-red-400";
- 
-          return (
-            <div
-              key={student._id}
-              className="bg-[#13161e] border border-white/5 rounded-2xl p-4 flex items-center gap-4 flex-wrap hover:border-white/10 transition-colors"
-            >
-              {/* Avatar + name */}
-              <div className="flex items-center gap-3 w-44 flex-shrink-0">
-                <div className="w-9 h-9 rounded-full bg-indigo-600/20 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[11px] font-semibold text-indigo-400">
-                    {student.firstName[0]}{student.lastName[0]}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-[13px] font-medium text-slate-200 leading-none">
-                    {student.firstName} {student.lastName}
-                  </p>
-                  <p className="text-[10px] text-slate-600 mt-0.5">Student</p>
-                </div>
-              </div>
- 
-              {/* Attendance stats */}
-              <div className="flex items-center gap-4 flex-shrink-0">
-                <div className="text-center">
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-0.5">Total</p>
-                  <p className="text-[15px] font-semibold text-slate-300 font-mono">{total}</p>
-                </div>
-                <div className="w-px h-8 bg-white/5" />
-                <div className="text-center">
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-0.5">Attended</p>
-                  <p className="text-[15px] font-semibold text-slate-300 font-mono">{attended}</p>
-                </div>
-                <div className="w-px h-8 bg-white/5" />
-                <div className="text-center">
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider mb-0.5">Rate</p>
-                  <p className={`text-[15px] font-semibold font-mono ${pctColor}`}>{pct}%</p>
-                </div>
-              </div>
- 
-              {/* Present / Absent toggle */}
-              <div className="flex gap-1.5 ml-auto flex-shrink-0">
-                <button
-                  onClick={() => handleAttendanceChange(student._id, "present")}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border
-                    ${attendanceState[student._id] === "present"
-                      ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
-                      : "bg-[#0d0f14] text-slate-500 border-white/5 hover:border-white/10"
-                    }`}
-                >
-                  Present
-                </button>
-                <button
-                  onClick={() => handleAttendanceChange(student._id, "absent")}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border
-                    ${attendanceState[student._id] === "absent"
-                      ? "bg-red-600/20 text-red-400 border-red-500/30"
-                      : "bg-[#0d0f14] text-slate-500 border-white/5 hover:border-white/10"
-                    }`}
-                >
-                  Absent
-                </button>
-              </div>
- 
+    <>
+      <PageHeader eyebrow="Manage" title="Attendance & Marks" description="Pick a course, mark who attended this class, then save." />
+
+      {/* Course picker: scrolls sideways on small screens */}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto pb-2 mb-5" role="tablist" aria-label="Courses" data-lenis-prevent>
+        <div className="flex gap-2 w-max sm:w-auto sm:flex-wrap">
+          {courses.map((c) => {
+            const active = courseId === c._id;
+            const tone = toneFor(c._id);
+            return (
               <button
-                onClick={() => submitAttendance(student._id)}
-                className="px-4 py-1.5 rounded-lg text-[12px] font-medium bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/30 transition-all flex-shrink-0"
+                key={c._id}
+                role="tab"
+                aria-selected={active}
+                onClick={() => selectCourse(c._id)}
+                className={cn(
+                  "relative h-11 px-5 rounded-2xl text-[14px] font-semibold whitespace-nowrap transition-colors",
+                  active ? "text-white" : "bg-white text-ink-soft border border-line hover:border-violet-200 shadow-soft"
+                )}
               >
-                Save attendance
+                {active && (
+                  <motion.span layoutId="course-tab" className={cn("absolute inset-0 rounded-2xl bg-linear-to-r shadow-soft", tone.gradient)}
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }} />
+                )}
+                <span className="relative flex items-center gap-2">
+                  {!active && <span className={cn("w-2.5 h-2.5 rounded-full bg-linear-to-br", tone.gradient)} />}
+                  {c.courseName}
+                </span>
               </button>
- 
-              {/* Marks */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <input
-                  type="number"
-                  placeholder="Marks"
-                  value={marksState[student._id] || ""}
-                  onChange={(e) => handleMarksChange(student._id, e.target.value)}
-                  className="bg-[#0d0f14] border border-white/5 text-slate-300 text-[13px] placeholder-slate-600 rounded-lg px-3 py-1.5 w-20 outline-none focus:border-indigo-500/40 transition-colors"
-                />
-                <button
-                  onClick={() => submitMarks(student._id)}
-                  className="px-4 py-1.5 rounded-lg text-[12px] font-medium bg-violet-600/20 text-violet-400 border border-violet-500/20 hover:bg-violet-600/30 transition-all"
-                >
-                  Save marks
-                </button>
-              </div>
- 
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      {roster.length === 0 ? (
+        <Card>
+          <EmptyState icon={CalendarCheck} title="No students in this course" message="Enroll students from the Courses page."
+            action={<Link to="/admin/courses" className="font-semibold text-violet-600">Manage courses</Link>} />
+        </Card>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <p className="text-[14px] font-semibold text-ink-soft mr-auto">
+              {roster.length} student{roster.length === 1 ? "" : "s"} in <span className={activeTone.text}>{courses.find((c) => c._id === courseId)?.courseName}</span>
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => markEveryone("present")}>
+              <CheckCheck size={15} className="text-emerald-500" aria-hidden="true" /> All present
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => markEveryone("absent")}>
+              <X size={15} className="text-rose-500" aria-hidden="true" /> All absent
+            </Button>
+          </div>
+
+          <Stagger as="ul" className="flex flex-col gap-3 pb-32" key={courseId}>
+            {roster.map(({ student, enrollment }) => {
+              const pct = percent(enrollment.attendedClasses, enrollment.totalClasses);
+              const state = marked[student._id];
+              const draftMarks = marks[student._id];
+              return (
+                <Reveal as="li" key={student._id}>
+                  <Card className={cn(
+                    "p-4 sm:p-5 flex flex-col md:flex-row md:items-center gap-4 transition-all duration-300",
+                    state === "present" && "ring-2 ring-emerald-300 bg-emerald-50/40",
+                    state === "absent" && "ring-2 ring-rose-300 bg-rose-50/40"
+                  )}>
+                    <div className="flex items-center gap-3 md:w-64 min-w-0">
+                      <Avatar person={student} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-bold text-ink truncate">{fullName(student)}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <ProgressBar value={pct} tone={enrollment.totalClasses ? attendanceTone(pct) : "violet"} className="w-20 h-1.5" label={`${fullName(student)} attendance`} />
+                          <span className="text-[12px] font-semibold text-muted tabular-nums">
+                            {enrollment.attendedClasses}/{enrollment.totalClasses}
+                          </span>
+                          {enrollment.totalClasses > 0 && <Badge tone={attendanceTone(pct)} className="py-0.5">{pct}%</Badge>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 md:flex md:ml-auto" role="group" aria-label={`Attendance for ${fullName(student)}`}>
+                      <AttendanceToggle label="Present" icon={Check} active={state === "present"} tone="good" onClick={() => toggle(student._id, "present")} />
+                      <AttendanceToggle label="Absent" icon={X} active={state === "absent"} tone="bad" onClick={() => toggle(student._id, "absent")} />
+                    </div>
+
+                    <form className="flex gap-2 md:w-60" onSubmit={(e) => { e.preventDefault(); saveMarks(student._id); }}>
+                      <label htmlFor={`marks-${student._id}`} className="sr-only">Marks for {fullName(student)}</label>
+                      <Input
+                        id={`marks-${student._id}`}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        placeholder={`Marks · ${enrollment.marks}`}
+                        value={draftMarks ?? ""}
+                        onChange={(e) => setMarks((m) => ({ ...m, [student._id]: e.target.value }))}
+                        className="h-11 py-0"
+                      />
+                      <Button type="submit" variant="secondary" loading={savingMarksFor === student._id} disabled={draftMarks === undefined || draftMarks === ""}>
+                        Save
+                      </Button>
+                    </form>
+                  </Card>
+                </Reveal>
+              );
+            })}
+          </Stagger>
+
+          {/* Floating save bar, always within thumb reach */}
+          <motion.div
+            initial={{ y: 120 }}
+            animate={{ y: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 28, delay: 0.3 }}
+            className="fixed z-20 bottom-4 inset-x-4 lg:left-[304px] lg:right-8 pb-[env(safe-area-inset-bottom)]"
+          >
+            <div className="max-w-[1336px] mx-auto glass shadow-lift rounded-3xl px-4 sm:px-6 py-3.5 flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-bold text-ink">
+                  {markedCount ? `${markedCount} of ${roster.length} marked` : "Mark students to record a class"}
+                </p>
+                {markedCount > 0 && (
+                  <p className="text-[12px] text-muted">
+                    <span className="text-emerald-600 font-semibold">{presentCount} present</span> ·{" "}
+                    <span className="text-rose-500 font-semibold">{markedCount - presentCount} absent</span>
+                  </p>
+                )}
+              </div>
+              <Button onClick={saveAttendance} loading={savingAttendance} disabled={!markedCount}>
+                <CalendarCheck size={17} aria-hidden="true" /> Save attendance
+              </Button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </>
   );
-};
- 
-export default Attendance;
+}
+
+function AttendanceToggle({ label, icon: Icon, active, tone, onClick }) {
+  return (
+    <motion.button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      whileTap={{ scale: 0.93 }}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl text-[14px] font-semibold transition-all duration-200",
+        active && tone === "good" && "bg-linear-to-r from-emerald-400 to-teal-500 text-white shadow-[0_8px_20px_-6px_rgb(16_185_129/0.55)]",
+        active && tone === "bad" && "bg-linear-to-r from-rose-400 to-pink-500 text-white shadow-[0_8px_20px_-6px_rgb(244_63_94/0.55)]",
+        !active && "bg-white text-ink-soft border border-line hover:border-violet-200"
+      )}
+    >
+      <Icon size={16} strokeWidth={2.5} aria-hidden="true" />
+      {label}
+    </motion.button>
+  );
+}

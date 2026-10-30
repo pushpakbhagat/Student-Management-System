@@ -1,5 +1,128 @@
 @import "tailwindcss";
+@import "lenis/dist/lenis.css";
 
-.text-stroke {
-  -webkit-text-stroke: 0.5px black;
+/* ── Design tokens ─────────────────────────────────────────────
+   Light lavender canvas, deep-indigo ink, violet → fuchsia → coral brand.
+   Use them as Tailwind classes: bg-canvas, text-ink, text-muted, border-line … */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-canvas: #f6f4fd;
+  --color-surface: #ffffff;
+  --color-ink: #1d1638;
+  --color-ink-soft: #4b4568;
+  --color-muted: #8b86a6;
+  --color-line: #ebe7f6;
+  --color-brand: #7c3aed;
+
+  --shadow-soft: 0 1px 2px rgb(29 22 56 / 0.04), 0 8px 24px -6px rgb(76 50 160 / 0.10);
+  --shadow-lift: 0 2px 4px rgb(29 22 56 / 0.05), 0 22px 44px -12px rgb(76 50 160 / 0.22);
+  --shadow-glow: 0 12px 32px -8px rgb(124 58 237 / 0.45);
+
+  --animate-drift: drift 22s ease-in-out infinite alternate;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-shimmer: shimmer 8s linear infinite;
+
+  @keyframes drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(4%, -6%, 0) scale(1.08); }
+    100% { transform: translate3d(-5%, 4%, 0) scale(0.96); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes shimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
 }
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+  }
+
+  ::selection {
+    @apply bg-violet-200 text-violet-900;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-violet-500;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(124 58 237 / 0.25) transparent;
+  }
+}
+
+@layer utilities {
+  /* the signature gradient, used for primary actions and highlights */
+  .bg-brand-gradient {
+    background-image: linear-gradient(120deg, #7c3aed 0%, #c026d3 55%, #f97316 110%);
+  }
+  .text-brand-gradient {
+    background-image: linear-gradient(120deg, #7c3aed 0%, #c026d3 50%, #f97316 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/80;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* react-day-picker, themed to match (div. raises specificity above the library's own stylesheet) */
+div.rdp-root {
+  --rdp-accent-color: #7c3aed;
+  --rdp-accent-background-color: #f3e8ff;
+  --rdp-today-color: #c026d3;
+  /* days shrink to fit narrow cards (the wrapper is a size container) */
+  --rdp-day-height: 38px;
+  --rdp-day-width: min(40px, calc(100cqw / 7.3));
+  --rdp-day_button-height: 34px;
+  --rdp-day_button-width: calc(var(--rdp-day-width) - 4px);
+  --rdp-day_button-border-radius: 12px;
+  --rdp-nav-height: 32px;
+  color: var(--color-ink-soft);
+  font-size: 13px;
+}
+.rdp-root .rdp-caption_label { font-family: var(--font-display); font-weight: 700; color: var(--color-ink); font-size: 15px; }
+.rdp-root .rdp-weekday { color: var(--color-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.rdp-root .rdp-chevron { fill: #7c3aed; }
+.rdp-root .rdp-day_button { transition: background-color 150ms, transform 150ms; }
+.rdp-root .rdp-day_button:hover { background: #f5f3ff; transform: scale(1.08); }
+.rdp-root .rdp-selected .rdp-day_button { background: linear-gradient(135deg, #7c3aed, #c026d3); color: white; border: none; font-weight: 600; }
+.rdp-root .rdp-due .rdp-day_button { position: relative; font-weight: 700; color: #ea580c; }
+.rdp-root .rdp-due .rdp-day_button::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #fb923c, #f43f5e);
+}
+.rdp-root .rdp-selected.rdp-due .rdp-day_button { color: white; }

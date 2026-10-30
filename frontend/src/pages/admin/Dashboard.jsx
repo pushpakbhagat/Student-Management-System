@@ -1,288 +1,246 @@
-import React, { useState, useMemo } from 'react'
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { DayPicker } from "react-day-picker";
-import "react-day-picker/dist/style.css";
-import useStudentStore from '../../store/useStudentStore';
+import "react-day-picker/style.css";
+import { motion } from "motion/react";
+import { ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, PartyPopper, TrendingUp, UserPlus, Users } from "lucide-react";
+import { Card, CardHeader, EmptyState, StatCard } from "../../components/ui/Card";
+import { Badge, ProgressBar, Ring } from "../../components/ui/Feedback";
+import { InView, Reveal, Stagger } from "../../components/ui/Motion";
+import Avatar from "../../components/ui/Avatar";
+import Hero from "../../components/ui/Hero";
+import useAdminStore from "../../store/useAdminStore";
+import useSessionStore from "../../store/useSessionStore";
+import { attendanceOf, attendanceTone, daysUntil, dueLabel, formatDate, fullName, greeting, idOf } from "../../lib/format";
+import { STATUS, toneFor } from "../../lib/palette";
+import { buttonClass } from "../../lib/buttonStyles";
+import { cn } from "../../lib/cn";
 
-const calendarStyles = `
-  .rdp { --rdp-accent-color: #4F46E5; --rdp-background-color: rgba(79,70,229,0.15); color: #cbd5e1; margin: 0; }
-  .rdp-months { background: transparent; }
-  .rdp-day { color: #94a3b8; border-radius: 8px; font-size: 12px; width: 32px; height: 32px; }
-  .rdp-day:hover:not([disabled]) { background: rgba(79,70,229,0.2) !important; color: white; }
-  .rdp-day_selected { background: #4F46E5 !important; color: white !important; }
-  .rdp-day_today { color: #818cf8 !important; font-weight: 700; }
-  .rdp-caption_label { color: #e2e8f0; font-size: 13px; font-weight: 600; }
-  .rdp-head_cell { color: #334155; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-  .rdp-nav_button { color: #475569; border-radius: 8px; }
-  .rdp-nav_button:hover { color: #e2e8f0 !important; background: rgba(255,255,255,0.06) !important; }
-`
+const linkClass = "inline-flex items-center gap-1 text-[13px] font-semibold text-violet-600 hover:text-fuchsia-600 transition-colors";
 
-const avatarColors = ['rgba(99,102,241,0.2)','rgba(16,185,129,0.15)','rgba(245,158,11,0.15)','rgba(6,182,212,0.12)','rgba(239,68,68,0.12)']
-const textColors   = ['#818CF8','#10B981','#F59E0B','#06B6D4','#EF4444']
+export default function Dashboard() {
+  const user = useSessionStore((s) => s.user);
+  const students = useAdminStore((s) => s.students);
+  const courses = useAdminStore((s) => s.courses);
+  const assignments = useAdminStore((s) => s.assignments);
+  const [selectedDay, setSelectedDay] = useState();
 
-const StatCard = ({ label, value, sub, iconPath, iconColor, iconBg }) => (
-  <div className='bg-[#13161e] border border-white/5 rounded-2xl p-5 flex flex-col gap-3 hover:border-white/10 transition-colors flex-1 min-w-[150px]'>
-    <div className='flex items-center justify-between'>
-      <p className='text-[9px] uppercase tracking-widest text-slate-600 font-semibold'>{label}</p>
-      <div className='w-8 h-8 rounded-xl flex items-center justify-center' style={{ background: iconBg }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill={iconColor}><path d={iconPath} /></svg>
-      </div>
-    </div>
-    <div>
-      <p className='text-3xl font-semibold text-slate-100 tracking-tight leading-none' style={{ fontFamily: "'DM Mono', monospace" }}>{value}</p>
-      {sub && <p className='text-[11px] text-slate-600 mt-1.5'>{sub}</p>}
-    </div>
-  </div>
-)
+  const courseName = useMemo(() => new Map(courses.map((c) => [c._id, c.courseName])), [courses]);
+  const overall = useMemo(() => attendanceOf(students.flatMap((s) => s.courses || [])), [students]);
 
-const Dashboard = () => {
-  const courses    = useStudentStore((state) => state.courses);
-  const students   = useStudentStore((state) => state.students);
-  const assignments = useStudentStore((state) => state.assignments);
-  const [selected, setSelected] = useState();
+  const upcoming = useMemo(
+    () =>
+      assignments
+        .filter((a) => a.dueDate && daysUntil(a.dueDate) >= 0)
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)),
+    [assignments]
+  );
+  const dueThisWeek = upcoming.filter((a) => daysUntil(a.dueDate) <= 7).length;
 
-  const totalStudents    = students.length
-  const totalCourses     = courses.length
-  const totalAssignments = assignments.length
+  const withRates = useMemo(
+    () => students.map((s) => {
+      const att = attendanceOf(s.courses);
+      return { ...s, rate: att.pct, hasClasses: att.total > 0 };
+    }),
+    [students]
+  );
+  const tracked = withRates.filter((s) => s.hasClasses);
+  const atRisk = tracked.filter((s) => attendanceTone(s.rate) !== "good").sort((a, b) => a.rate - b.rate);
 
-  const attendanceRate = useMemo(() => {
-    let total = 0, attended = 0
-    students.forEach(s => s.courses?.forEach(c => {
-      total    += c.totalClasses    || 0
-      attended += c.attendedClasses || 0
-    }))
-    return total > 0 ? Math.round((attended / total) * 100) : 0
-  }, [students])
-
-  const recentStudents = useMemo(() => [...students].slice(-5).reverse(), [students])
-
-  const upcomingAssignments = useMemo(() => {
-    const now = new Date()
-    return [...assignments]
-      .filter(a => a.dueDate && new Date(a.dueDate) >= now)
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-      .slice(0, 4)
-  }, [assignments])
-
-  const topStudents = useMemo(() => [...students]
-    .map(s => {
-      let total = 0, attended = 0
-      s.courses?.forEach(c => { total += c.totalClasses || 0; attended += c.attendedClasses || 0 })
-      return { ...s, rate: total > 0 ? Math.round((attended / total) * 100) : 0 }
-    })
-    .sort((a, b) => b.rate - a.rate)
-    .slice(0, 5), [students])
-
-  const courseBreakdown = useMemo(() => {
-    const counts = courses.map(course => ({
+  const enrollment = useMemo(() => {
+    const counts = courses.map((course) => ({
       ...course,
-      enrolled: students.filter(s =>
-        s.courses?.some(c => c.course?.toString() === course._id?.toString())
-      ).length
-    }))
-    const max = Math.max(...counts.map(c => c.enrolled), 1)
-    return counts.map(c => ({ ...c, pct: Math.round((c.enrolled / max) * 100) }))
-  }, [courses, students])
+      enrolled: students.filter((s) => s.courses?.some((e) => idOf(e.course) === course._id)).length,
+    }));
+    const max = Math.max(1, ...counts.map((c) => c.enrolled));
+    return counts.map((c) => ({ ...c, pct: Math.round((c.enrolled / max) * 100) }));
+  }, [courses, students]);
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
-  const daysUntil  = (d) => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null
-  const initials   = (s) => `${s.firstName?.[0] || ''}${s.lastName?.[0] || ''}`
+  const dueDates = useMemo(() => assignments.filter((a) => a.dueDate).map((a) => new Date(a.dueDate)), [assignments]);
+  const dueOnSelectedDay = selectedDay
+    ? assignments.filter((a) => a.dueDate && new Date(a.dueDate).toDateString() === selectedDay.toDateString())
+    : [];
+
+  const overallTone = overall.total ? attendanceTone(overall.pct) : "neutral";
 
   return (
-    <div className='p-6 w-full h-full overflow-y-auto
-      [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent
-      [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full'
-      style={{ fontFamily: "'DM Sans', sans-serif" }}>
-
-      <style>{calendarStyles}</style>
-
-      {/* ── Header ── */}
-      <div className='flex items-center justify-between mb-7'>
-        <div>
-          <p className='text-[10px] uppercase tracking-[0.12em] text-slate-600 font-semibold mb-1'>Admin · AY 2025–26</p>
-          <h1 className='text-2xl font-semibold text-slate-100 tracking-tight'>Dashboard</h1>
-        </div>
-        <div className='flex items-center gap-2 bg-[#13161e] border border-white/5 rounded-xl px-3 py-2'>
-          <div className='w-1.5 h-1.5 rounded-full bg-emerald-500' />
-          <span className='text-[12px] text-slate-400 font-medium'>Semester 2 · Active</span>
-        </div>
-      </div>
-
-      {/* ── Stat cards ── */}
-      <div className='flex gap-3 mb-5 flex-wrap'>
-        <StatCard label='Total students'   value={totalStudents}    sub='enrolled this semester'
-          iconPath='M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
-          iconColor='#818CF8' iconBg='rgba(99,102,241,0.15)' />
-        <StatCard label='Active courses'   value={totalCourses}     sub='running this semester'
-          iconPath='M12 3L1 9l4 2.18V15c0 3 3.58 5 7 5s7-2 7-5v-3.82L23 9zm0 12.35c-2.5 0-5-1.04-5-2.35v-1.18l5 2.28 5-2.28V13c0 1.31-2.5 2.35-5 2.35z'
-          iconColor='#06B6D4' iconBg='rgba(6,182,212,0.12)' />
-        <StatCard label='Assignments'      value={totalAssignments} sub={`${upcomingAssignments.length} upcoming`}
-          iconPath='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z'
-          iconColor='#F59E0B' iconBg='rgba(245,158,11,0.12)' />
-        <StatCard label='Avg. attendance'  value={`${attendanceRate}%`} sub='across all courses'
-          iconPath='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
-          iconColor={attendanceRate >= 75 ? '#10B981' : '#EF4444'}
-          iconBg={attendanceRate >= 75 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.1)'} />
-      </div>
-
-      {/* ── Row 2: Recent students table + Calendar ── */}
-      <div className='grid gap-4 mb-4' style={{ gridTemplateColumns: '1fr auto' }}>
-
-        <div className='bg-[#13161e] border border-white/5 rounded-2xl overflow-hidden'>
-          <div className='flex items-center justify-between px-5 py-4 border-b border-white/5'>
-            <p className='text-[13px] font-medium text-slate-300'>Recent students</p>
-            <span className='text-[11px] text-indigo-400 cursor-pointer hover:text-indigo-300 transition-colors'>View all →</span>
+    <>
+      <Hero
+        eyebrow="Admin dashboard"
+        title={<>{greeting()}, {user?.firstName ?? "there"} <motion.span className="inline-block origin-[70%_70%]" animate={{ rotate: [0, 18, -8, 18, 0] }} transition={{ duration: 1.4, delay: 0.6 }}>👋</motion.span></>}
+        actions={
+          <>
+            <Link to="/admin/students/new" className={buttonClass({ variant: "secondary", className: "border-white/0 text-violet-700 hover:text-fuchsia-700" })}>
+              <UserPlus size={17} aria-hidden="true" /> Add student
+            </Link>
+            <Link to="/admin/attendance" className="inline-flex items-center gap-2 h-11 px-5 rounded-2xl font-semibold text-[14px] text-white bg-white/15 ring-1 ring-white/30 backdrop-blur hover:bg-white/25 transition-colors">
+              <CalendarCheck size={17} aria-hidden="true" /> Take attendance
+            </Link>
+          </>
+        }
+        illustration={
+          <div className="rounded-[28px] bg-white/15 ring-1 ring-white/25 backdrop-blur p-5 text-center">
+            <Ring value={overall.pct} size={132} stroke={12} color="#ffffff" colorTo="#fde68a" label="Average attendance">
+              <span className="font-display text-[30px] font-bold leading-none">{overall.total ? `${overall.pct}%` : "—"}</span>
+              <span className="text-[11px] text-white/80 mt-1">attendance</span>
+            </Ring>
           </div>
-          <table className='w-full'>
-            <thead>
-              <tr className='bg-[#0d0f14]'>
-                {['Name','Courses','Attendance'].map(h => (
-                  <th key={h} className='text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-slate-600 font-semibold'>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentStudents.length === 0 && (
-                <tr><td colSpan={3} className='px-5 py-8 text-center text-[13px] text-slate-600'>No students yet</td></tr>
-              )}
-              {recentStudents.map((s, i) => {
-                let tot = 0, att = 0
-                s.courses?.forEach(c => { tot += c.totalClasses || 0; att += c.attendedClasses || 0 })
-                const pct = tot > 0 ? Math.round((att / tot) * 100) : 0
-                const col = pct >= 75 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444'
-                return (
-                  <tr key={s._id} className='border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors'>
-                    <td className='px-5 py-3'>
-                      <div className='flex items-center gap-2.5'>
-                        <div className='w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0'
-                          style={{ background: avatarColors[i % 5], color: textColors[i % 5] }}>
-                          {initials(s)}
-                        </div>
-                        <span className='text-[13px] font-medium text-slate-300'>{s.firstName} {s.lastName}</span>
+        }
+      >
+        {dueThisWeek > 0 ? `${dueThisWeek} assignment${dueThisWeek === 1 ? " is" : "s are"} due this week` : "No assignments due this week"}
+        {" · "}
+        {atRisk.length > 0 ? `${atRisk.length} student${atRisk.length === 1 ? " needs" : "s need"} attention` : "everyone's attendance is on track"}.
+      </Hero>
+
+      <Stagger className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6">
+        <Reveal><StatCard label="Students" value={students.length} sub="registered" icon={Users} tone="violet" /></Reveal>
+        <Reveal><StatCard label="Courses" value={courses.length} sub="running" icon={BookOpen} tone="teal" /></Reveal>
+        <Reveal><StatCard label="Assignments" value={assignments.length} sub={`${upcoming.length} upcoming`} icon={ClipboardList} tone="amber" /></Reveal>
+        <Reveal>
+          <StatCard
+            label="Avg. attendance"
+            value={overall.total ? overall.pct : "—"}
+            suffix="%"
+            sub={overall.total ? `${overall.attended} of ${overall.total} classes` : "no classes yet"}
+            icon={TrendingUp}
+            tone={overall.total ? overallTone : "coral"}
+          />
+        </Reveal>
+      </Stagger>
+
+      <div className="grid grid-cols-1 md:grid-cols-5 xl:grid-cols-3 gap-5 mb-5">
+        <InView className="md:col-span-3 xl:col-span-2">
+          <Card className="h-full">
+            <CardHeader title="Enrollment by course" subtitle="How many students take each course" icon={BookOpen}
+              action={<Link to="/admin/courses" className={linkClass}>Courses <ArrowUpRight size={15} /></Link>} />
+            {enrollment.length === 0 ? (
+              <EmptyState icon={BookOpen} title="No courses yet" className="py-10" />
+            ) : (
+              <ul className="px-5 sm:px-6 pb-6 pt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-5">
+                {enrollment.map((c) => {
+                  const tone = toneFor(c._id);
+                  return (
+                    <li key={c._id}>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className={cn("w-2.5 h-2.5 rounded-full bg-linear-to-br flex-shrink-0", tone.gradient)} />
+                          <span className="text-[14px] font-semibold text-ink truncate">{c.courseName}</span>
+                        </span>
+                        <span className="text-[13px] font-bold text-ink-soft tabular-nums">{c.enrolled}</span>
                       </div>
-                    </td>
-                    <td className='px-5 py-3'>
-                      <div className='flex flex-wrap gap-1'>
-                        {s.courses?.slice(0, 2).map((c, ci) => (
-                          <span key={ci} className='text-[10px] bg-indigo-600/10 text-indigo-400 border border-indigo-500/10 px-2 py-0.5 rounded-md'>
-                            {c.courseName || 'Course'}
-                          </span>
+                      <ProgressBar value={c.pct} tone={tone.name} label={`${c.courseName} enrollment`} />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        </InView>
+
+        <InView delay={0.1} className="md:col-span-2 xl:col-span-1">
+          <Card className="h-full flex flex-col items-center p-5">
+            <p className="self-start font-display text-[16px] font-semibold text-ink">Due dates</p>
+            <p className="self-start text-[12px] text-muted mb-1">Orange dots mark assignment deadlines</p>
+            <div className="@container w-full flex justify-center">
+              <DayPicker
+                mode="single"
+                selected={selectedDay}
+                onSelect={setSelectedDay}
+                modifiers={{ due: dueDates }}
+                modifiersClassNames={{ due: "rdp-due" }}
+              />
+            </div>
+            <div className="self-stretch mt-1 text-[13px] text-muted min-h-5">
+              {selectedDay &&
+                (dueOnSelectedDay.length
+                  ? dueOnSelectedDay.map((a) => <p key={a._id} className="font-medium text-ink truncate">• {a.title}</p>)
+                  : `Nothing due on ${formatDate(selectedDay)}`)}
+            </div>
+          </Card>
+        </InView>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <InView>
+          <Card className="h-full overflow-hidden">
+            <CardHeader title="Newest students" icon={Users} action={<Link to="/admin/students" className={linkClass}>All <ArrowUpRight size={15} /></Link>} />
+            {students.length === 0 ? (
+              <EmptyState icon={Users} title="No students yet" action={<Link to="/admin/students/new" className={linkClass}>Add your first student</Link>} />
+            ) : (
+              <ul className="px-3 pb-3">
+                {withRates.slice(0, 5).map((s) => (
+                  <li key={s._id} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-violet-50/60 transition-colors">
+                    <Avatar person={s} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-semibold text-ink truncate">{fullName(s)}</p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {(s.courses || []).slice(0, 4).map((e) => (
+                          <span key={e._id ?? idOf(e.course)} title={courseName.get(idOf(e.course))}
+                            className={cn("w-2 h-2 rounded-full bg-linear-to-br", toneFor(idOf(e.course)).gradient)} />
                         ))}
-                        {(s.courses?.length || 0) > 2 && (
-                          <span className='text-[10px] text-slate-600'>+{s.courses.length - 2}</span>
-                        )}
+                        <span className="text-[12px] text-muted ml-1">{s.courses?.length || 0} courses</span>
                       </div>
-                    </td>
-                    <td className='px-5 py-3'>
-                      <div className='flex items-center gap-2'>
-                        <div className='w-20 h-1.5 bg-[#0d0f14] rounded-full overflow-hidden'>
-                          <div className='h-full rounded-full' style={{ width: `${pct}%`, background: col }} />
-                        </div>
-                        <span className='text-[11px] font-mono' style={{ color: col, fontFamily: "'DM Mono', monospace" }}>{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className='bg-[#13161e] border border-white/5 rounded-2xl p-5'>
-          <p className='text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3'>Calendar</p>
-          <DayPicker mode="single" selected={selected} onSelect={setSelected} />
-        </div>
-      </div>
-
-      {/* ── Row 3: Upcoming assignments + Top attendance + Course breakdown ── */}
-      <div className='grid grid-cols-3 gap-4'>
-
-        {/* Upcoming assignments */}
-        <div className='bg-[#13161e] border border-white/5 rounded-2xl overflow-hidden'>
-          <div className='px-5 py-4 border-b border-white/5'>
-            <p className='text-[13px] font-medium text-slate-300'>Upcoming assignments</p>
-          </div>
-          <div className='flex flex-col p-3 gap-2'>
-            {upcomingAssignments.length === 0 && (
-              <p className='text-[12px] text-slate-600 text-center py-6'>No upcoming assignments</p>
-            )}
-            {upcomingAssignments.map((a, i) => {
-              const days   = daysUntil(a.dueDate)
-              const urgent = days !== null && days <= 3
-              return (
-                <div key={a._id || i} className='flex items-start gap-3 bg-[#0d0f14] rounded-xl p-3 border border-white/[0.04]'>
-                  <div className='w-1 self-stretch rounded-full flex-shrink-0' style={{ background: urgent ? '#EF4444' : '#4F46E5' }} />
-                  <div className='flex-1 min-w-0'>
-                    <p className='text-[12px] font-medium text-slate-300 truncate'>{a.title}</p>
-                    <p className='text-[10px] text-slate-600 mt-0.5 truncate'>{a.description}</p>
-                  </div>
-                  <div className='flex-shrink-0 text-right'>
-                    <p className='text-[10px]' style={{ color: urgent ? '#EF4444' : '#475569', fontFamily: "'DM Mono', monospace" }}>
-                      {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : formatDate(a.dueDate)}
-                    </p>
-                    {urgent && days > 0 && <p className='text-[9px] text-red-500'>{days}d left</p>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Top attendance */}
-        <div className='bg-[#13161e] border border-white/5 rounded-2xl overflow-hidden'>
-          <div className='px-5 py-4 border-b border-white/5'>
-            <p className='text-[13px] font-medium text-slate-300'>Top attendance</p>
-          </div>
-          <div className='flex flex-col p-4 gap-3'>
-            {topStudents.length === 0 && (
-              <p className='text-[12px] text-slate-600 text-center py-6'>No data yet</p>
-            )}
-            {topStudents.map((s, i) => (
-              <div key={s._id} className='flex items-center gap-3'>
-                <span className='text-[11px] text-slate-600 w-4 flex-shrink-0' style={{ fontFamily: "'DM Mono', monospace" }}>{i + 1}</span>
-                <div className='w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0'
-                  style={{ background: avatarColors[i % 5], color: textColors[i % 5] }}>
-                  {initials(s)}
-                </div>
-                <div className='flex-1 min-w-0'>
-                  <p className='text-[12px] font-medium text-slate-300 truncate'>{s.firstName} {s.lastName}</p>
-                  <div className='flex items-center gap-1.5 mt-1'>
-                    <div className='flex-1 h-1 bg-[#0d0f14] rounded-full overflow-hidden'>
-                      <div className='h-full rounded-full bg-emerald-500' style={{ width: `${s.rate}%` }} />
                     </div>
-                    <span className='text-[10px] text-emerald-500' style={{ fontFamily: "'DM Mono', monospace" }}>{s.rate}%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Course breakdown */}
-        <div className='bg-[#13161e] border border-white/5 rounded-2xl overflow-hidden'>
-          <div className='px-5 py-4 border-b border-white/5'>
-            <p className='text-[13px] font-medium text-slate-300'>Course breakdown</p>
-          </div>
-          <div className='flex flex-col p-4 gap-4'>
-            {courseBreakdown.length === 0 && (
-              <p className='text-[12px] text-slate-600 text-center py-6'>No courses yet</p>
+                    {s.hasClasses ? <Badge tone={attendanceTone(s.rate)}>{s.rate}%</Badge> : <Badge>new</Badge>}
+                  </li>
+                ))}
+              </ul>
             )}
-            {courseBreakdown.map((c, i) => (
-              <div key={c._id} className='flex flex-col gap-1.5'>
-                <div className='flex items-center justify-between'>
-                  <p className='text-[12px] font-medium text-slate-400 truncate max-w-[160px]'>{c.courseName}</p>
-                  <span className='text-[11px] text-slate-600' style={{ fontFamily: "'DM Mono', monospace" }}>{c.enrolled}</span>
-                </div>
-                <div className='h-1.5 bg-[#0d0f14] rounded-full overflow-hidden'>
-                  <div className='h-full rounded-full transition-all' style={{ width: `${c.pct}%`, background: textColors[i % 5] }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          </Card>
+        </InView>
 
+        <InView delay={0.08}>
+          <Card className="h-full overflow-hidden">
+            <CardHeader title="Coming up" icon={ClipboardList} action={<Link to="/admin/assignments" className={linkClass}>Manage <ArrowUpRight size={15} /></Link>} />
+            {upcoming.length === 0 ? (
+              <EmptyState icon={PartyPopper} title="Nothing due" message="Enjoy the quiet." className="py-10" />
+            ) : (
+              <ol className="px-6 pb-5 relative">
+                <span className="absolute left-[31px] top-2 bottom-7 w-px bg-line" aria-hidden="true" />
+                {upcoming.slice(0, 5).map((a) => {
+                  const tone = toneFor(idOf(a.course));
+                  return (
+                    <li key={a._id} className="relative flex gap-4 py-2.5">
+                      <span className={cn("relative z-10 mt-1 w-3 h-3 rounded-full ring-4 ring-white bg-linear-to-br flex-shrink-0", tone.gradient)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-semibold text-ink truncate">{a.title}</p>
+                        <p className={cn("text-[12px] font-semibold", tone.text)}>{courseName.get(idOf(a.course)) ?? "Course"}</p>
+                      </div>
+                      <Badge tone={daysUntil(a.dueDate) <= 3 ? "bad" : "neutral"}>{dueLabel(a.dueDate)}</Badge>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </Card>
+        </InView>
+
+        <InView delay={0.16} className="md:col-span-2 xl:col-span-1">
+          <Card className="h-full overflow-hidden">
+            <CardHeader title="Needs attention" subtitle="Attendance below 75%" icon={CalendarCheck}
+              action={<Link to="/admin/attendance" className={linkClass}>Attendance <ArrowUpRight size={15} /></Link>} />
+            {atRisk.length === 0 ? (
+              <EmptyState icon={PartyPopper} title="Everyone is on track" message={tracked.length ? "No one is below 75%." : "Record some classes to see this."} className="py-10" />
+            ) : (
+              <ul className="px-6 pb-6 pt-1 flex flex-col gap-4">
+                {atRisk.slice(0, 5).map((s) => (
+                  <li key={s._id} className="flex items-center gap-3">
+                    <Avatar person={s} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between gap-2 mb-1.5">
+                        <p className="text-[14px] font-semibold text-ink truncate">{fullName(s)}</p>
+                        <span className="text-[13px] font-bold tabular-nums" style={{ color: STATUS[attendanceTone(s.rate)].hex }}>{s.rate}%</span>
+                      </div>
+                      <ProgressBar value={s.rate} tone={attendanceTone(s.rate)} label={`${fullName(s)} attendance`} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </InView>
       </div>
-    </div>
-  )
+    </>
+  );
 }
 
-export default Dashboard

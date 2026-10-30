@@ -1,149 +1,105 @@
 const Course = require("../models/Courses")
 const Assignment = require("../models/Assignment")
+const { HttpError, assertValidId, pick } = require("../utils/http")
 
 // CREATE ASSIGNMENT
 async function handleNewAssignment(req, res) {
+    const { CourseId, title, description, dueDate } = req.body ?? {}
 
-    const { CourseId, title, description, dueDate } = req.body
+    if (!CourseId || !title || !dueDate) {
+        throw new HttpError(400, "Course, title and due date are required")
+    }
+    assertValidId(CourseId, "course id")
 
-    if (!CourseId || !title || !description || !dueDate) {
-        return res.status(400).json({ msg: "All fields are required" })
+    const course = await Course.findById(CourseId)
+    if (!course) {
+        throw new HttpError(404, "Course not found")
     }
 
-    try {
+    const assignment = await Assignment.create({
+        title,
+        description,
+        dueDate,
+        course: CourseId
+    })
+    await Course.updateOne({ _id: CourseId }, { $addToSet: { assignments: assignment._id } })
 
-        const assignment = await Assignment.create({
-            title,
-            description,
-            dueDate,
-            course: CourseId
-        })
-
-        await Course.findByIdAndUpdate(
-            CourseId,
-            { $push: { assignments: assignment._id } },
-            { new: true }
-        )
-
-        return res.status(201).json({
-            msg: "Assignment added successfully",
-            assignment
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            msg: "Server error",
-            error: error.message
-        })
-    }
+    return res.status(201).json({
+        msg: "Assignment added successfully",
+        assignment
+    })
 }
 
 
+// Students only ever see assignments for courses they are enrolled in
+function isEnrolledIn(account, courseId) {
+    return account.courses.some(c => c.course?.toString() === courseId.toString())
+}
+
 // GET ALL ASSIGNMENTS
 async function getAllAssignments(req, res) {
+    const filter = req.user.role === "admin"
+        ? {}
+        : { course: { $in: req.account.courses.map(c => c.course) } }
 
-    try {
-
-        const assignments = await Assignment.find()
-            .populate("course")
-
-        return res.status(200).json({
-            assignments
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            msg: "Server error",
-            error: error.message
-        })
-    }
+    const assignments = await Assignment.find(filter)
+        .populate("course", "courseName")
+        .sort({ dueDate: 1 })
+    return res.status(200).json({ assignments })
 }
 
 
 // GET ASSIGNMENTS BY COURSE
 async function getAssignmentsByCourse(req, res) {
-
     const { courseId } = req.params
-
-    try {
-
-        const assignments = await Assignment.find({
-            course: courseId
-        })
-
-        return res.status(200).json({
-            assignments
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            msg: "Server error",
-            error: error.message
-        })
+    assertValidId(courseId, "course id")
+    if (req.user.role !== "admin" && !isEnrolledIn(req.account, courseId)) {
+        throw new HttpError(403, "You are not enrolled in this course")
     }
+
+    const assignments = await Assignment.find({ course: courseId }).sort({ dueDate: 1 })
+    return res.status(200).json({ assignments })
 }
 
 
 // UPDATE ASSIGNMENT
 async function updateAssignment(req, res) {
-
     const { id } = req.params
-    const { title, description, dueDate } = req.body
+    assertValidId(id, "assignment id")
 
-    try {
-
-        const assignment = await Assignment.findByIdAndUpdate(
-            id,
-            { title, description, dueDate },
-            { new: true }
-        )
-
-        if (!assignment) {
-            return res.status(404).json({ msg: "Assignment not found" })
-        }
-
-        return res.status(200).json({
-            msg: "Assignment updated",
-            assignment
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            msg: "Server error",
-            error: error.message
-        })
+    const updates = pick(req.body, ["title", "description", "dueDate"])
+    const assignment = await Assignment.findByIdAndUpdate(
+        id,
+        updates,
+        { returnDocument: "after", runValidators: true }
+    )
+    if (!assignment) {
+        throw new HttpError(404, "Assignment not found")
     }
+
+    return res.status(200).json({
+        msg: "Assignment updated",
+        assignment
+    })
 }
 
 
 // DELETE ASSIGNMENT
 async function deleteAssignment(req, res) {
+    const { id } = req.params
+    assertValidId(id, "assignment id")
 
-    const { id } = req.body
-
-    try {
-
-        const assignment = await Assignment.findByIdAndDelete(id)
-
-        if (!assignment) {
-            return res.status(404).json({ msg: "Assignment not found" })
-        }
-
-        await Course.findByIdAndUpdate(
-            assignment.course,
-            { $pull: { assignments: id } }
-        )
-
-        return res.status(200).json({
-            msg: "Assignment deleted"
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            msg: "Server error",
-            error: error.message
-        })
+    const assignment = await Assignment.findByIdAndDelete(id)
+    if (!assignment) {
+        throw new HttpError(404, "Assignment not found")
     }
+
+    await Course.updateOne(
+        { _id: assignment.course },
+        { $pull: { assignments: assignment._id } }
+    )
+
+    return res.status(200).json({ msg: "Assignment deleted" })
 }
 
 module.exports = {

@@ -1,22 +1,31 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "just the backend for my project",
-  "homepage": "https://github.com/grifithhhhhh/Student-Management-System#readme",
+  "description": "REST API for the Student Management System (Express + MongoDB)",
+  "homepage": "https://github.com/pushpakbhagat/Student-Management-System#readme",
   "bugs": {
-    "url": "https://github.com/grifithhhhhh/Student-Management-System/issues"
+    "url": "https://github.com/pushpakbhagat/Student-Management-System/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/grifithhhhhh/Student-Management-System.git"
+    "url": "git+https://github.com/pushpakbhagat/Student-Management-System.git"
   },
   "license": "ISC",
   "author": "pushpak",
   "type": "commonjs",
-  "main": "main.js",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node seed.js",
+    "db:local": "node scripts/local-db.js",
+    "test": "node --test"
+  },
+  "nodemonConfig": {
+    "ignore": ["test/*", "scripts/*", ".local-db/*"]
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -24,8 +33,14 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.2.1",
-    "nodemon": "^3.1.14"
+    "mongoose": "^9.2.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server-core": "^11.3.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1"
   }
 }
